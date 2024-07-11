@@ -40,52 +40,36 @@ let solve (p, fresh_var) =
     Ok p
   with Solve_err e -> Error e
 
+let ( let* ) = Result.bind
+
 module Easy_tags : LANGUAGE = struct
   let name = "easy_tags"
 
-  type ty = named_vars * Syntax.ty
-  type parsed_program = Syntax.program * fresh_var
-  type canonicalized_program = parsed_program
-  type solved_program = Syntax.program
-  type mono_program = solved_program
-  type ir_program = unit
-  type evaled_program = unit
+  let run ~stage source =
+    match stage with
+    | "parse" ->
+        let* p, _ = parse source in
+        Ok (string_of_program p)
+    | "solve" ->
+        let* p = parse source in
+        let* p = solve p in
+        Ok (string_of_program p)
+    | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
-  let parse = parse
-  let canonicalize = Result.ok
-  let solve p = solve p
-  let mono p = Ok p
-  let ir _ = failwith "unimplemented"
-  let eval _ = failwith "unimplemented"
-  let print_parsed ?(width = default_width) (p, _) = string_of_program ~width p
-  let print_canonicalized = print_parsed
-  let print_solved ?(width = default_width) p = string_of_program ~width p
-  let print_mono = print_solved
-
-  let print_ir ?(width = default_width) _ =
-    let _ = width in
-    failwith "unimplemented"
-
-  let print_evaled ?(width = default_width) _ =
-    let _ = width in
-    failwith "unimplemented"
-
-  let print_type ?(width = default_width) (_, (names, t)) =
-    string_of_ty width names t
-
-  let types_at locs p =
-    let tys =
-      List.map
-        (fun l ->
-          let res =
-            match type_at l p with
-            | Some t -> Some (name_vars [ t ], t)
-            | None -> None
-          in
-          (l, res))
-        locs
+  let type_at loc source =
+    let* p = parse source in
+    let* p = solve p in
+    let ty = type_at loc p in
+    let res =
+      ty
+      |> Option.map (fun ty ->
+             let names = name_vars [ ty ] in
+             string_of_ty default_width names ty)
     in
-    tys
+    Ok res
 
-  let hover_info loc p = hover_info loc p
+  let hover_info loc source =
+    let* p = parse source in
+    let* p = solve p in
+    Ok (hover_info loc p)
 end

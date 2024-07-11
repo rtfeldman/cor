@@ -1,13 +1,14 @@
 let default_width = 50
 
-type lineco = int * int
+type lineco = int * int [@@deriving show]
 (** line * col *)
 
 let string_of_lineco (l, c) = string_of_int l ^ ":" ^ string_of_int c
 
-type loc = lineco * lineco
+type loc = lineco * lineco [@@deriving show]
 (** start * end *)
 
+let noloc = ((0, 0), (0, 0))
 let string_of_loc (l1, l2) = string_of_lineco l1 ^ "-" ^ string_of_lineco l2
 let deeper (l1, c1) (l2, c2) = l1 > l2 || (l1 = l2 && c1 >= c2)
 let shallower lc1 lc2 = deeper lc2 lc1
@@ -28,31 +29,12 @@ let reflow_lines prefix lines =
 module type LANGUAGE = sig
   val name : string
 
-  type ty
-  type parsed_program
-  type canonicalized_program
-  type solved_program
-  type mono_program
-  type ir_program
-  type evaled_program
+  val run : stage:string -> string -> (string, string) result
+  (** Compile a program to a given stage. *)
 
-  (*** Stages ***)
+  val type_at : loc -> string -> (string option, string) result
+  (** Return the string type at the given location. *)
 
-  val parse : string -> (parsed_program, string) result
-  val canonicalize : parsed_program -> (canonicalized_program, string) result
-  val solve : canonicalized_program -> (solved_program, string) result
-  val mono : solved_program -> (mono_program, string) result
-  val ir : mono_program -> (ir_program, string) result
-  val eval : ir_program -> (evaled_program, string) result
-
-  (*** Emit ***)
-  val print_parsed : ?width:int -> parsed_program -> string
-  val print_canonicalized : ?width:int -> canonicalized_program -> string
-  val print_solved : ?width:int -> solved_program -> string
-  val print_mono : ?width:int -> mono_program -> string
-  val print_ir : ?width:int -> ir_program -> string
-  val print_evaled : ?width:int -> evaled_program -> string
-  val types_at : loc list -> solved_program -> (loc * ty option) list
-  val print_type : ?width:int -> solved_program * ty -> string
-  val hover_info : lineco -> solved_program -> hover_info option
+  val hover_info : lineco -> string -> (hover_info option, string) result
+  (** Return hover information for the given location. *)
 end

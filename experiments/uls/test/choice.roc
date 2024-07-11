@@ -45,7 +45,8 @@ entry test3 =
 
 > cor-out +solve -elab
 > proto thunkDefault a : () -> () -> a
-> #     ^^^^^^^^^^^^ () -[[] + ~1:a:thunkDefault]-> () -[[] + ~2:a:thunkDefault]-> a
+> #     ^^^^^^^^^^^^ () -[[] + ~1:a:thunkDefault]->
+> #     ^^^^^^^^^^^^   () -[[] + ~2:a:thunkDefault]-> a
 > 
 > let thunkDefault = \() -> \() -> T1
 > #   ^^^^^^^^^^^^ () -[[`9]]-> () -[[`8]]-> T1
@@ -71,7 +72,8 @@ entry test3 =
 > entry test2 =
 >   let f = choice {
 > #     ^ () -[[] + ~1:?51:thunkDefault2 + ~1:?51:thunkDefault]->
->   () -[[] + ~2:?51:thunkDefault2 + ~2:?51:thunkDefault]-> ?51
+> #     ^   () -[[] + ~2:?51:thunkDefault2 + ~2:?51:thunkDefault]->
+> #     ^     ?51
 >       | thunkDefault
 >       | thunkDefault2
 >   } in
@@ -80,7 +82,8 @@ entry test3 =
 > 
 > entry test3 =
 >   let f = choice {
-> #     ^ () -[[] + ~2:?65:thunkDefault2 + ~2:?65:thunkDefault]-> ?65
+> #     ^ () -[[] + ~2:?65:thunkDefault2 + ~2:?65:thunkDefault]->
+> #     ^   ?65
 >       | thunkDefault ()
 >       | thunkDefault2 ()
 >   } in
@@ -115,9 +118,10 @@ entry test3 =
 >   \T1 -> ()
 > 
 > entry test1~1 =
->   `5(useT1)~1 (choice {
->                  | `4~1
->                  | `9(thunkDefault)~1 } () ())
+>   `5(useT1)~1
+>     (choice {
+>        | `4~1
+>        | `9(thunkDefault)~1 } () ())
 > 
 > let `1~1 =
 >   \() -> T1
@@ -140,9 +144,10 @@ entry test3 =
 >   \T1 -> ()
 > 
 > entry test2~1 =
->   `5(useT1)~2 (choice {
->                  | `2(thunkDefault2)~1
->                  | `9(thunkDefault)~2 } () ())
+>   `5(useT1)~2
+>     (choice {
+>        | `2(thunkDefault2)~1
+>        | `9(thunkDefault)~2 } () ())
 > 
 > let `1~2 =
 >   \() -> T1

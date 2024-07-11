@@ -28,7 +28,8 @@ entry test3 =
 
 > cor-out +solve -elab
 > proto thunkDefault a : () -> () -> a
-> #     ^^^^^^^^^^^^ () -[[] + ~1:a:thunkDefault]-> () -[[] + ~2:a:thunkDefault]-> a
+> #     ^^^^^^^^^^^^ () -[[] + ~1:a:thunkDefault]->
+> #     ^^^^^^^^^^^^   () -[[] + ~2:a:thunkDefault]-> a
 > 
 > let thunkDefault = \() -> \() -> T1
 > #   ^^^^^^^^^^^^ () -[[`3]]-> () -[[`2]]-> T1
@@ -37,7 +38,8 @@ entry test3 =
 > 
 > entry test =
 >   let alias = thunkDefault in
-> #     ^^^^^ () -[[] + ~1:?29:thunkDefault]-> () -[[] + ~2:?29:thunkDefault]-> ?29
+> #     ^^^^^ () -[[] + ~1:?29:thunkDefault]->
+> #     ^^^^^   () -[[] + ~2:?29:thunkDefault]-> ?29
 >   useT1 (alias () ())
 > #        ^^^^^ () -[[`3]]-> () -[[`2]]-> T1
 > 

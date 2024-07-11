@@ -51,33 +51,45 @@ let eval (ty, program) =
   let var, memory = Eval.eval program in
   Ok (ty, var, memory)
 
+let ( let* ) = Result.bind
+
 module Refine : LANGUAGE = struct
   let name = "refine"
 
-  type ty = Syntax.ty
-  type parsed_program = Syntax.program
-  type canonicalized_program = parsed_program
-  type solved_program = Syntax.program * Ir.ctx
-  type mono_program = solved_program
-  type ir_program = Syntax.ty * Ir.program
-  type evaled_program = Syntax.ty * Ir.var * Eval.memory
+  let run ~stage source =
+    match stage with
+    | "parse" ->
+        let* p = parse source in
+        Ok (string_of_program p)
+    | "solve" ->
+        let* p = parse source in
+        let* p = solve p in
+        Ok (string_of_program p)
+    | "ir" ->
+        let* p = parse source in
+        let* p = solve p in
+        let ctx = Ir.new_ctx () in
+        let* _, ir = lower ctx p in
+        Ok (Ir.string_of_program ir)
+    | "eval" ->
+        let* p = parse source in
+        let* p = solve p in
+        let* p = lower (Ir.new_ctx ()) p in
+        let* ty, var, memory = eval p in
+        Ok (Eval.print_back default_width ty var memory)
+    | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
-  let parse = parse
-  let canonicalize = Result.ok
-  let solve p = solve p |> Result.map (fun res -> (res, Ir.new_ctx ()))
-  let mono p = Ok p
-  let ir (p, ctx) = lower ctx p
-  let eval p = eval p
-  let print_parsed ?(width = default_width) p = string_of_program ~width p
-  let print_canonicalized = print_parsed
-  let print_solved ?(width = default_width) (p, _) = string_of_program ~width p
-  let print_mono = print_solved
-  let print_ir ?(width = default_width) (_, p) = Ir.string_of_program ~width p
+  let type_at loc source =
+    let* p = parse source in
+    let* p = solve p in
+    let ty = type_at loc p in
+    let res =
+      ty |> Option.map (fun ty -> Syntax.string_of_ty default_width ty)
+    in
+    Ok res
 
-  let print_evaled ?(width = default_width) (ty, var, memory) =
-    Eval.print_back width ty var memory
-
-  let print_type ?(width = default_width) (_, ty) = Syntax.string_of_ty width ty
-  let types_at locs (p, _) = List.map (fun l -> (l, type_at l p)) locs
-  let hover_info loc (p, _) = hover_info loc p
+  let hover_info loc source =
+    let* p = parse source in
+    let* p = solve p in
+    Ok (hover_info loc p)
 end

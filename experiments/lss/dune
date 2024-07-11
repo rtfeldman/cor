@@ -1,0 +1,3 @@
+(library
+  (name lss)
+  (libraries language syntax canonical))
