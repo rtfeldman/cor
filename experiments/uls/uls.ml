@@ -51,72 +51,96 @@ let solve p fresh_var =
 
 type tctx = (int * string) list
 
+let parse s = parse s
+let solve (p, fresh_var) = solve p fresh_var
+let mono (p, spec_table) = Ok (p, spec_table)
+
+type ir_program = { defs : (string * e_expr) list; entry_points : string list }
+
+let ir (p, spec_table) =
+  try
+    let defs, entry_points = ir p spec_table in
+    Ok { defs; entry_points }
+  with Ir_error e -> Error e
+
+type evaled_program = (string * expr list) list
+
+let eval { defs; entry_points } =
+  try Ok (eval defs entry_points) with Eval_error e -> Error e
+
+let print_parsed ?(width = default_width) (p, _) = string_of_program ~width p
+let print_solved ?(width = default_width) (p, _) = string_of_program ~width p
+let print_mono = print_solved
+
+let print_ir ?(width = default_width) { defs; entry_points } =
+  string_of_program ~width
+    (List.map (fun (x, e) -> Def ((noloc, x), e, List.mem x entry_points)) defs)
+
+let print_evaled ?(width = default_width) evaled =
+  let open Format in
+  with_buffer
+    (fun f ->
+      fprintf f "@[<v 0>";
+      List.iteri
+        (fun i (s, es) ->
+          if i > 0 then fprintf f "@,@,";
+          fprintf f "@[<hov 2>%s =" s;
+          List.iteri
+            (fun i e ->
+              fprintf f "@ ";
+              if i > 0 then fprintf f "| ";
+              fprintf f "@[";
+              pp_expr f (noloc, TVal "?", e);
+              fprintf f "@]")
+            es;
+          fprintf f "@]")
+        evaled;
+      fprintf f "@]")
+    width
+
+let ( let* ) = Result.bind
+
 module Uls : LANGUAGE = struct
   let name = "uls"
 
-  type ty = tctx * Syntax.ty
-  type parsed_program = Syntax.program * fresh_var
-  type canonicalized_program = parsed_program
-  type solved_program = Syntax.program * spec_table
-  type mono_program = solved_program
+  let run ~stage source =
+    match stage with
+    | "parse" ->
+        let* p = parse source in
+        Ok (print_parsed p)
+    | "solve" ->
+        let* p = parse source in
+        let* p = solve p in
+        Ok (print_solved p)
+    | "mono" ->
+        let* p = parse source in
+        let* p = solve p in
+        let* p = mono p in
+        Ok (print_mono p)
+    | "ir" ->
+        let* p = parse source in
+        let* p = solve p in
+        let* p = mono p in
+        let* p = ir p in
+        Ok (print_ir p)
+    | "eval" ->
+        let* p = parse source in
+        let* p = solve p in
+        let* p = mono p in
+        let* p = ir p in
+        let* p = eval p in
+        Ok (print_evaled p)
+    | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
-  type ir_program = {
-    defs : (string * e_expr) list;
-    entry_points : string list;
-  }
+  let type_at loc s =
+    let* p = parse s in
+    let* p, _ = solve p in
+    type_at loc p
+    |> Option.map (fun (tctx, t) -> string_of_ty default_width tctx t)
+    |> Result.ok
 
-  type evaled_program = (string * expr list) list
-
-  let parse = parse
-  let canonicalize = Result.ok
-  let solve (p, fresh_var) = solve p fresh_var
-  let mono (p, spec_table) = Ok (p, spec_table)
-
-  let ir (p, spec_table) =
-    try
-      let defs, entry_points = ir p spec_table in
-      Ok { defs; entry_points }
-    with Ir_error e -> Error e
-
-  let eval { defs; entry_points } =
-    try Ok (eval defs entry_points) with Eval_error e -> Error e
-
-  let print_parsed ?(width = default_width) (p, _) = string_of_program ~width p
-  let print_canonicalized = print_parsed
-  let print_solved ?(width = default_width) (p, _) = string_of_program ~width p
-  let print_mono = print_solved
-
-  let print_ir ?(width = default_width) { defs; entry_points } =
-    string_of_program ~width
-      (List.map
-         (fun (x, e) -> Def ((noloc, x), e, List.mem x entry_points))
-         defs)
-
-  let print_evaled ?(width = default_width) evaled =
-    let open Format in
-    with_buffer
-      (fun f ->
-        fprintf f "@[<v 0>";
-        List.iteri
-          (fun i (s, es) ->
-            if i > 0 then fprintf f "@,@,";
-            fprintf f "@[<hov 2>%s =" s;
-            List.iteri
-              (fun i e ->
-                fprintf f "@ ";
-                if i > 0 then fprintf f "| ";
-                fprintf f "@[";
-                pp_expr f (noloc, TVal "?", e);
-                fprintf f "@]")
-              es;
-            fprintf f "@]")
-          evaled;
-        fprintf f "@]")
-      width
-
-  let print_type ?(width = default_width) (_, (tctx, t)) =
-    string_of_ty width tctx t
-
-  let types_at locs (p, _) = List.map (fun l -> (l, type_at l p)) locs
-  let hover_info loc (p, _) = hover_info loc p
+  let hover_info lineco s =
+    let* p = parse s in
+    let* p, _ = solve p in
+    Ok (hover_info lineco p)
 end

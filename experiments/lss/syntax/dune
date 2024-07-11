@@ -1,0 +1,10 @@
+(menhir
+  (flags --explain --fixed-exception --no-dollars)
+  (modules parser))
+
+(library
+ (name syntax)
+ (libraries language util symbol sedlex menhirLib)
+ (inline_tests)
+ (preprocess
+  (pps ppx_deriving.show ppx_inline_test sedlex.ppx)))

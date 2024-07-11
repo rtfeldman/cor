@@ -9,7 +9,8 @@
     uls
     refine
     easy_tags
-    compose_fx))
+    compose_fx
+    lss))
 
 (executable
   (public_name cor)

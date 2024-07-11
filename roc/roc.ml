@@ -26,31 +26,11 @@ let parse s =
 module Roc : LANGUAGE = struct
   let name = "roc"
 
-  type ty = unit
-  type parsed_program = loc_expr
-  type canonicalized_program = parsed_program
-  type solved_program = loc_expr
-  type mono_program = solved_program
-  type ir_program = loc_expr
-  type evaled_program = loc_expr
+  let run ~stage source =
+    match stage with
+    | "parse" -> source |> parse |> Result.map string_of_expr
+    | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
-  let parse = parse
-  let canonicalize x = Ok x
-  let solve _ = failwith "unimplemented"
-  let mono _ = failwith "unimplemented"
-  let ir _ = failwith "unimplemented"
-  let eval _ = failwith "unimplemented"
-  let print_parsed = string_of_expr
-  let print_canonicalized = print_parsed
-  let print_solved = string_of_expr
-  let print_mono = string_of_expr
-  let print_ir = string_of_expr
-  let print_evaled = string_of_expr
-
-  let print_type ?width _ =
-    let _ = width in
-    failwith "unimplemented"
-
-  let types_at _ _ = failwith "unimplemented"
+  let type_at _ _ = failwith "unimplemented"
   let hover_info _ = failwith "unimplemented"
 end

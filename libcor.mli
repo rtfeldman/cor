@@ -6,21 +6,15 @@ val find_language : string -> (module LANGUAGE) option
 (** Returns the [LANGUAGE] module given a string of the language name. Is
     [None] if no such language exists. *)
 
-type phase
 type emit
 
-val phases : string list
 val emits : string list
-
-val phase_of_string : string -> phase option
-(** Returns the phase given a string of the same name. Is [None] if no
-    such phase exists. *)
 
 val emit_of_string : string -> emit option
 (** Returns the emit given a string of the same name. Is [None] if no
     such emit exists. *)
 
-type command = phase * emit
+type command = string * emit
 type command_err
 
 val string_of_command_err : command_err -> string
