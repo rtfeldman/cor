@@ -16,8 +16,6 @@ and letfn =
       arg : typed_symbol;
       body : e_expr;
       sig_ : tvar option;
-      lam_sym : symbol;
-      captures : typed_symbol list;
     }
 
 and letval =
@@ -31,12 +29,7 @@ and expr =
   | Tag of string * e_expr list
   | LetFn of letfn * e_expr
   | Let of letval * e_expr
-  | Clos of {
-      arg : tvar * symbol;
-      body : e_expr;
-      lam_sym : symbol;
-      captures : typed_symbol list;
-    }
+  | Clos of { arg : tvar * symbol; body : e_expr }
   | Call of e_expr * e_expr
   | KCall of S.kernelfn * e_expr list
   | When of e_expr * branch list

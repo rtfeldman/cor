@@ -267,12 +267,12 @@ type canonicalized_expr_output = {
   references : tvar SymbolMap.t;
 }
 
-let canonicalize_expr ~name_hint ~ctx ~globals e =
+let canonicalize_expr e =
   let rec go_branch (p, e) =
     let can_pat, defined_p = canonicalize_pat p in
     let can_expr, free_e = go_expr e in
     ((can_pat, can_expr), SymbolMap.diff free_e defined_p)
-  and go_expr ?(name_hint = None) (_, t, e) =
+  and go_expr (_, t, e) =
     let can_expr, free =
       match e with
       | S.Var x ->
@@ -295,8 +295,7 @@ let canonicalize_expr ~name_hint ~ctx ~globals e =
           let can_tag = Tag (tag, can_exprs) in
           (can_tag, free_es)
       | S.Let { recursive; bind = _, (_, t_x), x; expr; body } ->
-          let x_name = Symbol.syn_of ctx.symbols x in
-          let expr, free_e = go_expr ~name_hint:(Some x_name) expr in
+          let expr, free_e = go_expr expr in
           recursive := SymbolMap.mem x free_e;
           let free_e = SymbolMap.remove x free_e in
 
@@ -307,12 +306,10 @@ let canonicalize_expr ~name_hint ~ctx ~globals e =
 
           let can_let =
             match expr with
-            | Clos { arg; body = clos_body; captures; lam_sym } ->
+            | Clos { arg; body = clos_body } ->
                 (* We drop the closure can_expr type in the canonicalized def, so tie it to
                    the bind variable now. *)
                 tvar_set t_expr @@ Link t_x;
-
-                let captures = List.filter (fun (_, s) -> s <> x) captures in
 
                 let letfn =
                   Letfn
@@ -321,8 +318,6 @@ let canonicalize_expr ~name_hint ~ctx ~globals e =
                       bind = (t_x, x);
                       arg;
                       body = clos_body;
-                      lam_sym;
-                      captures;
                       sig_ = None;
                     }
                 in
@@ -338,14 +333,7 @@ let canonicalize_expr ~name_hint ~ctx ~globals e =
       | Clos { arg = _, (_, t_a), a; body } ->
           let body, free_b = go_expr body in
           let free = SymbolMap.remove a free_b in
-          let captures =
-            List.map (fun (s, t) -> (t, s))
-            @@ SymbolMap.bindings
-            @@ SymbolMap.remove_keys globals free
-          in
-          let lam_str = Option.value name_hint ~default:"lam" in
-          let lam_sym = ctx.symbols.fresh_symbol lam_str in
-          let can_clos = Clos { arg = (t_a, a); body; captures; lam_sym } in
+          let can_clos = Clos { arg = (t_a, a); body } in
           (can_clos, free)
       | Call (e1, e2) ->
           let can_e1, free_e1 = go_expr e1 in
@@ -372,13 +360,11 @@ let canonicalize_expr ~name_hint ~ctx ~globals e =
     in
     ((t, can_expr), free)
   in
-  let can_expr, references = go_expr ~name_hint:(Some name_hint) e in
+  let can_expr, references = go_expr e in
   { can_expr; references }
 
-let mk_canonical_def ~ctx ~name_hint ~expr ~globals ~bind ~sig_ ~run =
-  let { can_expr; references } =
-    canonicalize_expr ~name_hint ~ctx ~globals expr
-  in
+let mk_canonical_def ~expr ~globals ~bind ~sig_ ~run =
+  let { can_expr; references } = canonicalize_expr expr in
   let t_bind_x, bind_x = bind in
   let recursive =
     if SymbolMap.mem bind_x references then Some bind_x else None
@@ -396,25 +382,12 @@ let mk_canonical_def ~ctx ~name_hint ~expr ~globals ~bind ~sig_ ~run =
       if Option.is_some recursive then
         can_error "canonicalize_defs" "run definitions cannot be recursive";
       Run { bind; body = (t_can_expr, can_expr); sig_ }
-  | false, Clos { arg; body; captures; lam_sym = _ } ->
+  | false, Clos { arg; body } ->
       (* We drop the closure can_expr type in the canonicalized def, so tie it to
          the bind variable now. *)
       tvar_set t_can_expr @@ Link t_bind_x;
 
-      let captures =
-        List.filter
-          (fun (_, s) -> s <> bind_x && not (List.mem s globals))
-          captures
-      in
-
-      if List.length captures > 0 then
-        failwith @@ "captured on toplevel: " ^ String.concat ", "
-        @@ List.map show_symbol @@ List.map snd @@ captures;
-
-      let letfn =
-        Letfn
-          { recursive; bind; arg; body; sig_; lam_sym = bind_x; captures = [] }
-      in
+      let letfn = Letfn { recursive; bind; arg; body; sig_ } in
       Def { kind = `Letfn letfn }
   | false, _ ->
       if Option.is_some recursive then
@@ -449,10 +422,7 @@ let canonicalize_defs :
         let bind : typed_symbol = (def_t, y) in
         let sig_ = Some sig_ in
 
-        let name_hint = Symbol.syn_of ctx.symbols x in
-        let def =
-          mk_canonical_def ~ctx ~name_hint ~expr ~globals ~bind ~sig_ ~run
-        in
+        let def = mk_canonical_def ~expr ~globals ~bind ~sig_ ~run in
         def :: inner rest
     | (_, def_t, ((Def ((_, x), expr) | Run ((_, x), expr)) as def)) :: rest ->
         let run = match def with Run _ -> true | _ -> false in
@@ -460,10 +430,7 @@ let canonicalize_defs :
         let bind : typed_symbol = (def_t, x) in
         let sig_ = None in
 
-        let name_hint = Symbol.syn_of ctx.symbols x in
-        let def =
-          mk_canonical_def ~ctx ~name_hint ~expr ~globals ~bind ~sig_ ~run
-        in
+        let def = mk_canonical_def ~expr ~globals ~bind ~sig_ ~run in
         def :: inner rest
     | (_, sig_t, Sig ((_, x), (_, sig_))) :: rest ->
         instantiate_signature ctx alias_map sig_;
