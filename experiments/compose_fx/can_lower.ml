@@ -131,7 +131,8 @@ let canonicalize_alias { alias_type; name; args; real } =
     | Content (TPrim (`Str | `Unit | `Int)) -> ()
     | Alias { alias; real = _ } when is_same_alias alias ->
         tvar_set tvar @@ Link alias_type;
-        tvar_set_recur (unlink alias_type) true
+        (*tvar_set_recur (unlink alias_type) true*)
+        ()
     | Alias _ ->
         can_error "canonicalize_alias"
           ("cannot reference an alias " ^ show_tvar tvar
@@ -189,7 +190,7 @@ let instantiate_signature : ctx -> alias_map -> tvar -> unit =
        the alias may also appear in the scheme, so we map it as well. *)
     let scheme_arg_vars = List.map tvar_v @@ List.map snd @@ schme_args in
     let arg_tys = List.map snd args in
-    tvar_set_recur (unlink alias_type) (tvar_recurs @@ unlink scheme_alias_type);
+    (*tvar_set_recur (unlink alias_type) (tvar_recurs @@ unlink scheme_alias_type);*)
     let new_arg_map =
       (tvar_v scheme_alias_type, alias_type)
       :: List.combine scheme_arg_vars arg_tys
@@ -332,7 +333,7 @@ let canonicalize_expr ~name_hint ~ctx ~globals e =
                 let letfn =
                   Can.Letfn
                     {
-                      recursive = !recursive;
+                      recursive = (if !recursive then Some x else None);
                       bind = (t_x, x);
                       arg;
                       body = clos_body;
@@ -395,7 +396,9 @@ let mk_canonical_def ~ctx ~name_hint ~expr ~globals ~bind ~sig_ ~run =
     canonicalize_expr ~name_hint ~ctx ~globals expr
   in
   let t_bind_x, bind_x = bind in
-  let recursive = SymbolMap.mem bind_x references in
+  let recursive =
+    if SymbolMap.mem bind_x references then Some bind_x else None
+  in
 
   let t_can_expr, can_expr = can_expr in
 
@@ -406,10 +409,10 @@ let mk_canonical_def ~ctx ~name_hint ~expr ~globals ~bind ~sig_ ~run =
 
   match (run, can_expr) with
   | true, _ ->
-      if recursive then
+      if Option.is_some recursive then
         can_error "canonicalize_defs" "run definitions cannot be recursive";
       Can.Run { bind; body = (t_can_expr, can_expr); sig_ }
-  | false, Clos { arg; body; captures; lam_sym } ->
+  | false, Clos { arg; body; captures; lam_sym = _ } ->
       (* We drop the closure can_expr type in the canonicalized def, so tie it to
          the bind variable now. *)
       tvar_set t_can_expr @@ Link t_bind_x;
@@ -425,11 +428,12 @@ let mk_canonical_def ~ctx ~name_hint ~expr ~globals ~bind ~sig_ ~run =
         @@ List.map show_symbol @@ List.map snd @@ captures;
 
       let letfn =
-        Can.Letfn { recursive; bind; arg; body; sig_; lam_sym; captures = [] }
+        Can.Letfn
+          { recursive; bind; arg; body; sig_; lam_sym = bind_x; captures = [] }
       in
       Can.Def { kind = `Letfn letfn }
   | false, _ ->
-      if recursive then
+      if Option.is_some recursive then
         can_error "canonicalize_defs"
           "non-closure definitions cannot be recursive";
       let letval = Can.Letval { bind; body = (t_can_expr, can_expr); sig_ } in

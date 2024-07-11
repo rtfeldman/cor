@@ -1,25 +1,37 @@
 open Ir
+open Ir_ctx
 open Type
+
+let unlink_tvar tvar =
+  let rec go tvar =
+    match tvar_deref tvar with
+    | Link tvar -> go tvar
+    | Content (TFn (_, ls, _)) -> go ls
+    | Alias { real; _ } -> go real
+    | _ -> tvar
+  in
+  go tvar
 
 let layout_of_tvar : ctx -> tvar -> layout =
  fun { cache; fresh_rec_id; _ } tvar ->
   let rec go tvar : layout =
-    let tvar = unlink_w_alias tvar in
+    let tvar = unlink_tvar tvar in
     let var = tvar_v tvar in
     match List.assoc_opt var !cache with
     | Some layout ->
-        if !layout = Union [] then
+        if !layout = UnfilledRecursive then
           (* NB: late recursion-setting. If we failed to find a recursion point
              earlier on, we opportunistically set it now. *)
           tvar_set_recur tvar true;
         layout
     | None ->
-        let lay = ref @@ Union [] in
+        let lay = ref @@ UnfilledRecursive in
         cache := (var, lay) :: !cache;
         let repr =
           match tvar_deref tvar with
           | Link _ -> failwith "impossible"
           | Alias _ -> failwith "impossible"
+          | Content (TFn _) -> failwith "impossible"
           | Unbd _ -> Union []
           | ForA _ -> failwith "impossible after monomorphization"
           | Content (TPrim `Str) -> Str
@@ -36,8 +48,15 @@ let layout_of_tvar : ctx -> tvar -> layout =
               let tags = List.map translate_tag tags in
               let union = Union tags in
               union
-          | Content (TLambdaSet _) -> failwith "todo"
-          | Content (TFn (_, _, _)) -> closure_repr ()
+          | Content (TLambdaSet { lambdas; ambient_fn = _ }) ->
+              let translate_lam : ty_lambda -> layout =
+               fun { lambda = _; captures } ->
+                let args = List.map go captures in
+                ref @@ Struct args
+              in
+              let lams = List.map translate_lam lambdas in
+              let union = Union lams in
+              union
         in
         let recurs = tvar_recurs tvar in
         let repr =
@@ -52,7 +71,16 @@ let tag_id ctor ty =
   match tvar_deref @@ unlink_w_alias ty with
   | Content (TTag { tags; ext = _ }) ->
       Util.index_of (fun (name, _) -> name = ctor) tags
-  | _ -> failwith "unreachable"
+  | _ -> failwith "unreachable: not a tag"
+
+let unpack_lambda_set ty =
+  let rec go ty =
+    match tvar_deref @@ unlink_w_alias ty with
+    | Content (TFn (_, lset, _)) -> go lset
+    | Content (TLambdaSet lset) -> lset
+    | _ -> failwith "unreachable: not a lambda set"
+  in
+  go ty
 
 let is_lay_equiv : layout -> layout -> bool =
  fun l1 l2 ->
@@ -76,8 +104,11 @@ let is_lay_equiv : layout -> layout -> bool =
     | Box (l1, None), Box (l2, None) -> go l1 l2
     | Box (_, Some _), Box (_, None) -> false
     | Box (_, None), Box (_, Some _) -> false
-    | Erased, Erased -> true
-    | FunctionPointer, FunctionPointer -> true
     | _ -> false
   in
   go l1 l2
+
+let unpack_tfn t =
+  match Type.tvar_deref @@ Type.unlink_w_alias t with
+  | Content (TFn ((_, arg), _, (_, ret))) -> (arg, ret)
+  | _ -> failwith "unreachable: not a function type"

@@ -1,27 +1,22 @@
 open Symbol
-open Ir
+open Ir_ctx
 
-type specialization = {
-  name : symbol;
-  args : layout list;
-  ret : layout;
-  specialization_symbol : symbol;
-}
-
-type t = { specializations : specialization list ref }
-
-let determine_specialization ~ctx tvar =
-  let open Type in
-  let tvar = unlink_w_alias tvar in
-  match tvar_deref tvar with
-  | Content (TFn ((_, arg), _lset, (_, ret))) ->
-      let arg = Ir_layout.layout_of_tvar ctx arg in
-      let ret = Ir_layout.layout_of_tvar ctx ret in
-      let args = [ erased_captures_lay (); arg ] in
-      (args, ret)
-  | _ ->
-      let ret = Ir_layout.layout_of_tvar ctx tvar in
-      ([], ret)
+let determine_specialization ~ctx ~arg ~captures ~ret =
+  let arg =
+    match arg with
+    | Some arg -> [ Ir_layout.layout_of_tvar ctx arg ]
+    | None -> []
+  in
+  let captures =
+    match captures with
+    | None -> []
+    | Some captures ->
+        let captures = List.map (Ir_layout.layout_of_tvar ctx) captures in
+        [ ref @@ Ir.Struct captures ]
+  in
+  let args = captures @ arg in
+  let ret = Ir_layout.layout_of_tvar ctx ret in
+  (args, ret)
 
 let equiv_specialization specialization ~name ~args ~ret =
   if specialization.name <> name then false
@@ -31,11 +26,11 @@ let equiv_specialization specialization ~name ~args ~ret =
   else if not @@ Ir_layout.is_lay_equiv specialization.ret ret then false
   else true
 
-let add_specialization ~(ctx : ctx) { specializations } name tvar :
+let add_specialization ~(ctx : ctx) ~name ~arg ~captures ~ret :
     symbol * [ `New | `Existing ] =
-  let args, ret = determine_specialization ~ctx tvar in
+  let args, ret = determine_specialization ~ctx ~arg ~captures ~ret in
   let specialization =
-    List.find_opt (equiv_specialization ~name ~args ~ret) !specializations
+    List.find_opt (equiv_specialization ~name ~args ~ret) !(ctx.specializations)
   in
   match specialization with
   | Some specialization -> (specialization.specialization_symbol, `Existing)
@@ -43,8 +38,14 @@ let add_specialization ~(ctx : ctx) { specializations } name tvar :
       let specialization_symbol =
         ctx.symbols.fresh_symbol_named @@ Symbol.syn_of ctx.symbols name
       in
-      specializations :=
-        { name; args; ret; specialization_symbol } :: !specializations;
+      (*
+      print_endline
+      @@ Format.asprintf "Adding specialization %s for %s.\n\tArgs: %a.\n\tRet: %a"
+           (Symbol.norm_of specialization_symbol)
+           (Symbol.norm_of name)
+           (Format.pp_print_list ~pp_sep:Format.pp_print_space Ir.pp_layout_top)
+           args Ir.pp_layout_top ret;
+      *)
+      ctx.specializations :=
+        { name; args; ret; specialization_symbol } :: !(ctx.specializations);
       (specialization_symbol, `New)
-
-let make : unit -> t = fun () -> { specializations = ref [] }

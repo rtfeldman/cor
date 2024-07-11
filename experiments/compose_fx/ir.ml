@@ -11,15 +11,12 @@ type layout_repr =
   | Struct of layout list
   | Union of layout list
   | Box of layout * rec_id option
-  | Erased
-  | FunctionPointer
+  | UnfilledRecursive
 
 and layout = layout_repr ref
 
 let layout_str () = ref Str
 let layout_int () = ref Int
-let erased_captures_lay () = ref @@ Box (ref @@ Erased, None)
-let closure_repr () = Struct [ ref @@ FunctionPointer; erased_captures_lay () ]
 
 type var = layout * symbol
 type lit = [ `Int of int | `String of string ]
@@ -32,13 +29,10 @@ type expr =
   | GetUnionStruct of var
   | MakeStruct of var list
   | GetStructField of var * int
-  | CallIndirect of var * var list
   | CallDirect of symbol * var list
   | CallKFn of Syntax.kernelfn * var list
   | MakeBox of var
   | GetBoxed of var
-  | PtrCast of var * layout
-  | MakeFnPtr of symbol
 
 type stmt =
   | Let of var * expr
@@ -59,23 +53,6 @@ type program = {
 
 type fresh_rec_id = unit -> rec_id
 type layout_cache = (variable * layout) list ref
-
-type ctx = {
-  symbols : Symbol.t;
-  cache : layout_cache;
-  fresh_rec_id : fresh_rec_id;
-  fresh_tvar : fresh_tvar;
-}
-
-let new_ctx symbols fresh_tvar =
-  let cache = ref [] in
-  let next_id = ref 0 in
-  let fresh_rec_id () =
-    let id = !next_id in
-    next_id := id + 1;
-    `Rec id
-  in
-  { symbols; cache; fresh_rec_id; fresh_tvar }
 
 let pp_rec_id : Format.formatter -> rec_id -> unit =
  fun f (`Rec i) -> Format.fprintf f "%%type_%d" i
@@ -134,8 +111,7 @@ let pp_layout : ?max_depth:int -> Format.formatter -> layout -> unit =
           seen_recs := r :: !seen_recs;
           fprintf f "@[<hv 2>box<@,%a =@ %a>@]" pp_rec_id r go lay
       | Box (lay, None) -> fprintf f "@[<hv 2>box<@,%a>@]" go lay
-      | Erased -> fprintf f "erased"
-      | FunctionPointer -> fprintf f "*fn"
+      | UnfilledRecursive -> fprintf f "unfilled_recursive"
   in
   go ~max_depth f l
 
@@ -152,8 +128,7 @@ let rec show_layout_head l =
   | Box (l, None) -> Format.sprintf "box<%s>" (show_layout_head l)
   | Box (l, Some r) ->
       Format.sprintf "box<%s = %s>" (show_rec_id r) (show_layout_head l)
-  | Erased -> "erased"
-  | FunctionPointer -> "*fn"
+  | UnfilledRecursive -> "unfilled_recursive"
 
 let pp_symbol : Format.formatter -> symbol -> unit =
  fun f s -> Format.fprintf f "%s" (Symbol.norm_of s)
@@ -203,12 +178,6 @@ let pp_expr : Format.formatter -> expr -> unit =
           (pp_print_custom_break ~fits:("", 0, "") ~breaks:(";", 0, ""))
     | GetStructField (v, i) ->
         fprintf f "@[<hv 2>@get_struct_field<@,%a,@ %d>@]" pp_v_name v i
-    | CallIndirect (var, args) ->
-        let pp_args f = function
-          | [] -> ()
-          | args -> fprintf f ",@ %a" pp_v_names args
-        in
-        fprintf f "@[<hv 2>@call_indirect(@,%a%a)@]" pp_v_name var pp_args args
     | CallDirect (fn, args) ->
         let pp_args f = function
           | [] -> ()
@@ -225,19 +194,22 @@ let pp_expr : Format.formatter -> expr -> unit =
           pp_args args
     | MakeBox v -> fprintf f "@[<hv 2>@make_box(@,%a)@]" pp_v_name v
     | GetBoxed v -> fprintf f "@[<hv 2>@get_boxed<@,%a>@]" pp_v_name v
-    | PtrCast (v, lay) ->
-        fprintf f "@[<hv 2>@ptr_cast(@,%a as@ %a)@]" pp_v_name v pp_layout_top
-          lay
-    | MakeFnPtr fn -> fprintf f "@[<hv 2>@make_fn_ptr<@,%a>@]" pp_symbol fn
 
 let rec pp_stmt : Format.formatter -> stmt -> unit =
   let open Format in
   fun f -> function
     | Let (v, e) -> fprintf f "@[<hv 2>let %a@ = %a;@]" pp_var v pp_expr e
     | Switch { cond; branches; join } ->
+        let pp_stmts f = function
+          | [] -> ()
+          | stmts ->
+              fprintf f "%a@ "
+                (pp_print_list ~pp_sep:pp_print_space pp_stmt)
+                stmts
+        in
         let pp_branch f (i, (lets, ret)) =
-          fprintf f "@[<hv 0>@[<hv 2>%d -> {@,%a@,%a@]@,}@]" i
-            (pp_print_list pp_stmt) lets pp_expr ret
+          fprintf f "@[<hv 0>@[<hv 2>%d -> {@ %a%a@]@ }@]" i pp_stmts lets
+            pp_expr ret
         in
         fprintf f "@[<v 0>switch %a {@,%a@,} in join %a;@]" pp_v_name cond
           (pp_print_list pp_branch) branches pp_v_name join

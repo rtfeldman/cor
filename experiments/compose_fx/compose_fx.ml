@@ -41,7 +41,7 @@ module Compose_fx : LANGUAGE = struct
     can : Can.program;
   }
 
-  type mono_program = { ctx : Ir.ctx; mono : Mono.specialized }
+  type mono_program = { ctx : Ir_ctx.ctx; mono : Mono.specialized }
   type ir_program = { symbols : Symbol.t; program : Ir.program }
   type evaled_program = { symbols : Symbol.t; evaled : Eval.evaled list }
 
@@ -82,7 +82,7 @@ module Compose_fx : LANGUAGE = struct
     with Solve.Solve_err e -> Error e
 
   let mono ({ symbols; fresh_tvar; can; _ } : solved_program) =
-    let ctx = Ir.new_ctx symbols fresh_tvar in
+    let ctx = Ir_ctx.new_ctx symbols fresh_tvar in
     let specialized = Mono_lower.specialize ctx can in
     Ok { ctx; mono = specialized }
 
@@ -92,8 +92,8 @@ module Compose_fx : LANGUAGE = struct
     let compiled = Ir_sort.sort_program compiled in
     (*
     print_endline @@ Ir.string_of_program ~width:80 compiled;
-    Ir_check.check compiled;
     *)
+    Ir_check.check compiled;
     Ok { symbols = ctx.symbols; program = compiled }
 
   let eval ({ program; symbols } : ir_program) =

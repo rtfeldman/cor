@@ -111,16 +111,8 @@ let check_expr : string -> fenv -> venv -> layout -> expr -> unit =
       let l_x = lookup_var ctx venv x in
       let l_field = get_struct_field ctx l_x i in
       check_lay_equiv ctx l_field lay
-  | CallIndirect (f, args) ->
-      let l_f = lookup_var (ctx_join ctx "find_f") venv f in
-      check_lay_equiv (ctx_join ctx "expect_fnptr") (ref @@ FunctionPointer) l_f;
-      ignore
-      @@ List.mapi
-           (fun i x ->
-             lookup_var (ctx_join ctx ("arg " ^ string_of_int i)) venv x)
-           args
   | CallDirect (f, args) ->
-      let proc = List.assoc f fenv in
+      let proc = lookup_proc ctx fenv f in
       let l_args = List.map (lookup_var ctx venv) args in
       let proc_args = List.map (fun (l, _) -> l) proc.args in
       List.iter2 (check_lay_equiv ctx) proc_args l_args;
@@ -141,14 +133,6 @@ let check_expr : string -> fenv -> venv -> layout -> expr -> unit =
       let l_x = lookup_var ctx venv x in
       let l_x_inner = get_boxed l_x in
       check_lay_equiv ctx l_x_inner lay
-  | PtrCast (x, new_l) ->
-      let l_x = lookup_var ctx venv x in
-      check_is_ptr_type l_x;
-      check_is_ptr_type new_l;
-      check_lay_equiv ctx new_l lay
-  | MakeFnPtr f ->
-      ignore @@ lookup_proc ctx fenv f;
-      check_lay_equiv ctx (ref @@ FunctionPointer) lay
 
 let check_body : string -> fenv -> venv -> var -> stmt list -> unit =
  fun ctx fenv venv (l_ret, ret) stmts ->
