@@ -44,6 +44,21 @@ let canonicalize ({ symbols; syntax; fresh_tvar } : parsed_program) =
     Ok { symbols; fresh_tvar; syntax; canonical }
   with Canonical.Lower.Can_error e -> Error e
 
+type solved_program = {
+  symbols : Symbol.t;
+  syntax : Syntax.Ast.program;
+  fresh_tvar : Canonical.Type.fresh_tvar;
+  canonical_solved : Canonical_solved.Ast.program;
+}
+
+let solve ({ symbols; syntax; fresh_tvar; canonical } : canonicalized_program) =
+  try
+    let canonical_solved =
+      Canonical_solved.Lower.lower { symbols; fresh_tvar } canonical
+    in
+    Ok { symbols; fresh_tvar; syntax; canonical_solved }
+  with Canonical_solved.Lower.Solve_err e -> Error e
+
 let ( let* ) = Result.bind
 
 module Lss : LANGUAGE = struct
@@ -58,8 +73,28 @@ module Lss : LANGUAGE = struct
         let* p = parse source in
         let* { canonical; _ } = canonicalize p in
         Ok (Canonical.Print.string_of_program canonical)
+    | "solve" ->
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* { canonical_solved; _ } = solve p in
+        Ok (Canonical_solved.Print.string_of_program canonical_solved)
     | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
-  let type_at _ _ = failwith "Not implemented"
-  let hover_info _ _ = failwith "Not implemented"
+  let type_at loc s =
+    let* p = parse s in
+    let* p = canonicalize p in
+    let* { symbols; syntax; _ } = solve p in
+    let ty =
+      Syntax.Query.type_at loc syntax
+      |> Option.map (fun ty ->
+             let names = Syntax.Type_print.name_vars [ ty ] in
+             Syntax.Type_print.string_of_tvar default_width symbols names ty)
+    in
+    Ok ty
+
+  let hover_info loc s =
+    let* p = parse s in
+    let* p = canonicalize p in
+    let* { symbols; syntax; _ } = solve p in
+    Ok (Syntax.Query.hover_info loc syntax symbols)
 end

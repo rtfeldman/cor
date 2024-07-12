@@ -1,0 +1,3 @@
+(library
+  (name canonical_solved)
+  (libraries canonical))

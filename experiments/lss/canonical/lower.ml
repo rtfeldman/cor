@@ -321,12 +321,15 @@ let canonicalize_expr e =
                       sig_ = None;
                     }
                 in
-                LetFn (letfn, body)
+                Let (`Letfn letfn, body)
             | _ ->
-                Let
-                  ( Letval
-                      { bind = (t_x, x); body = (t_expr, expr); sig_ = None },
-                    body )
+                if !recursive then
+                  can_error "canonicalize_expr"
+                    "non-closure definitions cannot be recursive";
+                let letval =
+                  Letval { bind = (t_x, x); body = (t_expr, expr); sig_ = None }
+                in
+                Let (`Letval letval, body)
           in
 
           (can_let, SymbolMap.union free_e free_b)
@@ -388,13 +391,13 @@ let mk_canonical_def ~expr ~globals ~bind ~sig_ ~run =
       tvar_set t_can_expr @@ Link t_bind_x;
 
       let letfn = Letfn { recursive; bind; arg; body; sig_ } in
-      Def { kind = `Letfn letfn }
+      Def (`Letfn letfn)
   | false, _ ->
       if Option.is_some recursive then
         can_error "canonicalize_defs"
           "non-closure definitions cannot be recursive";
       let letval = Letval { bind; body = (t_can_expr, can_expr); sig_ } in
-      Def { kind = `Letval letval }
+      Def (`Letval letval)
 
 let canonicalize_defs :
     ctx:ctx ->

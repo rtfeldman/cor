@@ -3,6 +3,10 @@ open Type
 module S = Syntax.Ast
 
 type typed_symbol = tvar * symbol
+type kernelfn = S.kernelfn
+type kernel_sig = S.kernel_sig
+
+let kernel_sig = S.kernel_sig
 
 type e_pat = tvar * pat
 and pat = PTag of string * e_pat list | PVar of symbol
@@ -21,17 +25,18 @@ and letfn =
 and letval =
   | Letval of { bind : typed_symbol; body : e_expr; sig_ : tvar option }
 
+and let_def = [ `Letfn of letfn | `Letval of letval ]
+
 and expr =
   | Var of symbol
   | Int of int
   | Str of string
   | Unit
   | Tag of string * e_expr list
-  | LetFn of letfn * e_expr
-  | Let of letval * e_expr
+  | Let of let_def * e_expr
   | Clos of { arg : tvar * symbol; body : e_expr }
   | Call of e_expr * e_expr
-  | KCall of S.kernelfn * e_expr list
+  | KCall of kernelfn * e_expr list
   | When of e_expr * branch list
 
 and branch = e_pat * e_expr
@@ -39,16 +44,16 @@ and branch = e_pat * e_expr
 let type_of_letfn = function Letfn { bind = ty, _; _ } -> ty
 let type_of_letval = function Letval { bind = ty, _; _ } -> ty
 
-type let_def = { kind : [ `Letfn of letfn | `Letval of letval ] }
-
 type def =
   | Def of let_def
   | Run of { bind : typed_symbol; body : e_expr; sig_ : tvar option }
 
 type program = def list
 
+let name_of_let_def = function
+  | `Letfn (Letfn { bind = _, x; _ }) -> x
+  | `Letval (Letval { bind = _, x; _ }) -> x
+
 let name_of_def = function
-  | Def { kind = `Letfn (Letfn { bind = _, x; _ }) }
-  | Def { kind = `Letval (Letval { bind = _, x; _ }) } ->
-      x
+  | Def let_def -> name_of_let_def let_def
   | Run { bind = _, x; _ } -> x
