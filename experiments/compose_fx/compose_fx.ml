@@ -112,35 +112,63 @@ let print_evaled ?(width = default_width) ({ evaled; symbols } : evaled_program)
     =
   Eval.string_of_evaled ~width symbols evaled
 
-let ( >>= ) = Result.bind
-let ( &> ) a b = Result.map b a
+let ( let* ) = Result.bind
 
 module Compose_fx : LANGUAGE = struct
   let name = "compose_fx"
 
   let run ~stage source =
     match stage with
-    | "parse" -> source |> parse &> print_parsed
-    | "canonicalize" -> source |> parse >>= canonicalize &> print_canonicalized
-    | "solve" -> source |> parse >>= canonicalize >>= solve &> print_solved
+    | "parse" ->
+        let* p = parse source in
+        Ok (print_parsed p)
+    | "canonicalize" ->
+        let* p = parse source in
+        let* p = canonicalize p in
+        Ok (print_canonicalized p)
+    | "solve" ->
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* p = solve p in
+        Ok (print_solved p)
     | "mono" ->
-        source |> parse >>= canonicalize >>= solve >>= mono &> print_mono
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* p = solve p in
+        let* p = mono p in
+        Ok (print_mono p)
     | "ir" ->
-        source |> parse >>= canonicalize >>= solve >>= mono >>= ir &> print_ir
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* p = solve p in
+        let* p = mono p in
+        let* p = ir p in
+        Ok (print_ir p)
     | "eval" ->
-        source |> parse >>= canonicalize >>= solve >>= mono >>= ir >>= eval
-        &> print_evaled
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* p = solve p in
+        let* p = mono p in
+        let* p = ir p in
+        let* p = eval p in
+        Ok (print_evaled p)
     | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
   let type_at loc s =
-    s |> parse >>= canonicalize >>= solve
-    &> fun ({ symbols; syn; _ } : solved_program) ->
-    type_at loc syn
-    |> Option.map (fun ty ->
-           let names = Type.name_vars [ ty ] in
-           Type.string_of_tvar default_width symbols names ty)
+    let* p = parse s in
+    let* p = canonicalize p in
+    let* { symbols; syn; _ } = solve p in
+    let ty =
+      type_at loc syn
+      |> Option.map (fun ty ->
+             let names = Type.name_vars [ ty ] in
+             Type.string_of_tvar default_width symbols names ty)
+    in
+    Ok ty
 
   let hover_info loc s =
-    s |> parse >>= canonicalize >>= solve
-    &> fun ({ symbols; syn; _ } : solved_program) -> hover_info loc syn symbols
+    let* p = parse s in
+    let* p = canonicalize p in
+    let* { symbols; syn; _ } = solve p in
+    Ok (hover_info loc syn symbols)
 end

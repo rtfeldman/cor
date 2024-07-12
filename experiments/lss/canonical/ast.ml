@@ -3,6 +3,10 @@ open Type
 module S = Syntax.Ast
 
 type typed_symbol = tvar * symbol
+type kernelfn = S.kernelfn
+type kernel_sig = S.kernel_sig
+
+let kernel_sig = S.kernel_sig
 
 type e_pat = tvar * pat
 and pat = PTag of string * e_pat list | PVar of symbol
@@ -32,7 +36,7 @@ and expr =
   | Let of let_def * e_expr
   | Clos of { arg : tvar * symbol; body : e_expr }
   | Call of e_expr * e_expr
-  | KCall of S.kernelfn * e_expr list
+  | KCall of kernelfn * e_expr list
   | When of e_expr * branch list
 
 and branch = e_pat * e_expr
@@ -46,8 +50,10 @@ type def =
 
 type program = def list
 
+let name_of_let_def = function
+  | `Letfn (Letfn { bind = _, x; _ }) -> x
+  | `Letval (Letval { bind = _, x; _ }) -> x
+
 let name_of_def = function
-  | Def (`Letfn (Letfn { bind = _, x; _ }))
-  | Def (`Letval (Letval { bind = _, x; _ })) ->
-      x
+  | Def let_def -> name_of_let_def let_def
   | Run { bind = _, x; _ } -> x
