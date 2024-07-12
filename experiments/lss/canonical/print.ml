@@ -38,7 +38,7 @@ let pp_arrow f (lam, captures) =
         (Format.pp_print_list ~pp_sep:pp_print_space pp_typed_symbol)
         captures
 
-let pp_expr f =
+let rec pp_expr f =
   let open Format in
   let int_of_parens_ctx = function `Free -> 1 | `Apply -> 2 in
   let ( >> ) ctx1 ctx2 = int_of_parens_ctx ctx1 > int_of_parens_ctx ctx2 in
@@ -62,16 +62,11 @@ let pp_expr f =
         in
         with_parens f (parens >> `Free) expr;
         fprintf f "@]"
-    | LetFn (Letfn { bind; arg; body; sig_; recursive = _ }, rest) ->
-        let ty = fst bind in
-        let clos = Clos { arg; body } in
-        go `Free (ty, Let (Letval { bind; body = (ty, clos); sig_ }, rest))
-    | Let (Letval { bind = _, x; body = rhs; _ }, rest) ->
+    | Let (def, rest) ->
         fprintf f "@[<v 0>@[<hv 0>";
         let expr () =
-          fprintf f "@[<hv 2>let %a =@ " pp_symbol x;
-          go `Free rhs;
-          fprintf f "@]@ in@]@,";
+          pp_letdef f def;
+          fprintf f "@ in@]@,";
           go `Free rest
         in
         with_parens f (parens >> `Free) expr;
@@ -113,12 +108,16 @@ let pp_expr f =
   in
   go `Free
 
-let pp_letfn f (Letfn { bind = _, x; arg; body; recursive = _; sig_ = _ }) =
+and pp_letdef f = function
+  | `Letfn letfn -> pp_letfn f letfn
+  | `Letval letval -> pp_letval f letval
+
+and pp_letfn f (Letfn { bind = _, x; arg; body; recursive = _; sig_ = _ }) =
   let open Format in
   fprintf f "@[<v 0>@[<v 2>let %a = \\%a ->@ %a@]@]" pp_symbol x pp_symbol
     (snd arg) pp_expr body
 
-let pp_letval f (Letval { bind; body; _ }) =
+and pp_letval f (Letval { bind; body; _ }) =
   let open Format in
   fprintf f "@[<v 0>@[<v 2>let %a =@ %a@]@]" pp_symbol (snd bind) pp_expr body
 
@@ -126,10 +125,7 @@ let pp_def : Format.formatter -> def -> unit =
  fun f def ->
   let open Format in
   match def with
-  | Def { kind } -> (
-      match kind with
-      | `Letfn letfn -> fprintf f "@[%a@]" pp_letfn letfn
-      | `Letval letval -> fprintf f "@[%a@]" pp_letval letval)
+  | Def letdef -> pp_letdef f letdef
   | Run { bind; body; sig_ } ->
       fprintf f "@[%a@]" pp_letval (Letval { bind; body; sig_ })
 

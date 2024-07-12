@@ -21,14 +21,15 @@ and letfn =
 and letval =
   | Letval of { bind : typed_symbol; body : e_expr; sig_ : tvar option }
 
+and let_def = [ `Letfn of letfn | `Letval of letval ]
+
 and expr =
   | Var of symbol
   | Int of int
   | Str of string
   | Unit
   | Tag of string * e_expr list
-  | LetFn of letfn * e_expr
-  | Let of letval * e_expr
+  | Let of let_def * e_expr
   | Clos of { arg : tvar * symbol; body : e_expr }
   | Call of e_expr * e_expr
   | KCall of S.kernelfn * e_expr list
@@ -39,8 +40,6 @@ and branch = e_pat * e_expr
 let type_of_letfn = function Letfn { bind = ty, _; _ } -> ty
 let type_of_letval = function Letval { bind = ty, _; _ } -> ty
 
-type let_def = { kind : [ `Letfn of letfn | `Letval of letval ] }
-
 type def =
   | Def of let_def
   | Run of { bind : typed_symbol; body : e_expr; sig_ : tvar option }
@@ -48,7 +47,7 @@ type def =
 type program = def list
 
 let name_of_def = function
-  | Def { kind = `Letfn (Letfn { bind = _, x; _ }) }
-  | Def { kind = `Letval (Letval { bind = _, x; _ }) } ->
+  | Def (`Letfn (Letfn { bind = _, x; _ }))
+  | Def (`Letval (Letval { bind = _, x; _ })) ->
       x
   | Run { bind = _, x; _ } -> x
