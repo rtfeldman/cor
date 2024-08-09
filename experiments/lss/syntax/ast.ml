@@ -67,7 +67,7 @@ let fresh_parse_ctx () : parse_ctx =
     !n
   in
   let fresh_tvar : Type.fresh_tvar =
-   fun ty -> { ty = ref ty; var = `Var (fresh_int ()); recur = ref false }
+   fun ty -> { ty = ref ty; var = `Var (fresh_int ()) }
   in
   let symbols = Symbol.make () in
   { fresh_tvar; symbols }

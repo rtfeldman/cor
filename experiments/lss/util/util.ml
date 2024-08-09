@@ -44,4 +44,4 @@ let fresh_name_generator () =
   in
   fun hint -> find hint 0
 
-let default_width = 50
+let default_width = 80

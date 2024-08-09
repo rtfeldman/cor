@@ -23,25 +23,14 @@ and ty =
   | Content of ty_content
   | Alias of ty_alias_content
 
-and tvar = { ty : ty ref; var : variable; recur : bool ref }
+and tvar = { ty : ty ref; var : variable }
 (** Mutable type cell *)
 
 let tvar_deref tvar = !(tvar.ty)
 let tvar_set tvar ty = tvar.ty := ty
-
-let tvar_set_recur tvar recur =
-  if !(tvar.recur) && not recur then failwith "recursive type variable";
-  tvar.recur := recur
-
-let tvar_recurs tvar = !(tvar.recur)
 let tvar_v tvar = tvar.var
-
-let tvar_int () =
-  { ty = ref (Content (TPrim `Int)); var = `Var 0; recur = ref false }
-
-let tvar_str () =
-  { ty = ref (Content (TPrim `Str)); var = `Var 1; recur = ref false }
-
+let tvar_int () = { ty = ref (Content (TPrim `Int)); var = `Var 0 }
+let tvar_str () = { ty = ref (Content (TPrim `Str)); var = `Var 1 }
 let min_var = 1000
 
 let rec unlink tvar =

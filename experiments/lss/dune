@@ -1,4 +1,5 @@
 (library
   (name lss)
   (libraries language
-             syntax canonical canonical_solved))
+             syntax canonical canonical_solved
+             monotype))

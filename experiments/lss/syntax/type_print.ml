@@ -130,7 +130,6 @@ let pp_tvar :
   and go visited parens t =
     let t = unlink t in
     let var = tvar_v t in
-    let recurs = tvar_recurs @@ t in
     let inner f () =
       if List.mem var visited then
         (* This is a recursive type *)
@@ -191,7 +190,7 @@ let pp_tvar :
             in
             fprintf f "@[<hov 2>%a@]" header ()
     in
-    if recurs then fprintf f "@[<hov 2>%%%a@]" inner () else inner f ()
+    inner f ()
   in
   go visited `Free t
 

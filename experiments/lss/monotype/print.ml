@@ -1,5 +1,6 @@
 open Ast
 open Util
+module S = Syntax.Ast
 
 let pp_symbol f symbol =
   Format.pp_print_string f (Symbol.show_symbol_raw symbol)
@@ -112,22 +113,25 @@ and pp_letdef f = function
   | `Letfn letfn -> pp_letfn f letfn
   | `Letval letval -> pp_letval f letval
 
-and pp_letfn f (Letfn { bind = _, x; arg; body; recursive = _; sig_ = _ }) =
+and pp_letfn f (Letfn { bind = t, x; arg; body; recursive }) =
   let open Format in
-  fprintf f "@[<v 0>@[<v 2>let %a = \\%a ->@ %a@]@]" pp_symbol x pp_symbol
-    (snd arg) pp_expr body
+  fprintf f "@[<v 0>@[<v 2>let%s %a: %a = \\%a ->@ %a@]@]"
+    (if recursive then " rec" else "")
+    pp_symbol x Type_print.pp_ty t pp_symbol (snd arg) pp_expr body
 
 and pp_letval f (Letval { bind; body; _ }) =
   let open Format in
-  fprintf f "@[<v 0>@[<v 2>let %a =@ %a@]@]" pp_symbol (snd bind) pp_expr body
+  fprintf f "@[<v 0>@[<v 2>let %a: %a =@ %a@]@]" pp_symbol (snd bind)
+    Type_print.pp_ty (fst bind) pp_expr body
 
 let pp_def : Format.formatter -> def -> unit =
  fun f def ->
   let open Format in
   match def with
   | `Def letdef -> pp_letdef f letdef
-  | `Run (Run { bind; body; sig_ }) ->
-      fprintf f "@[%a@]" pp_letval (Letval { bind; body; sig_ })
+  | `Run (Run { bind; body }) ->
+      fprintf f "@[<v 0>@[<v 2>run %a: %a =@ %a@]@]" pp_symbol (snd bind)
+        Type_print.pp_ty (fst bind) pp_expr body
 
 let pp_defs : Format.formatter -> def list -> unit =
  fun f defs ->

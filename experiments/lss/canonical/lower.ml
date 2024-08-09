@@ -384,20 +384,20 @@ let mk_canonical_def ~expr ~globals ~bind ~sig_ ~run =
   | true, _ ->
       if Option.is_some recursive then
         can_error "canonicalize_defs" "run definitions cannot be recursive";
-      Run { bind; body = (t_can_expr, can_expr); sig_ }
+      `Run (Run { bind; body = (t_can_expr, can_expr); sig_ })
   | false, Clos { arg; body } ->
       (* We drop the closure can_expr type in the canonicalized def, so tie it to
          the bind variable now. *)
       tvar_set t_can_expr @@ Link t_bind_x;
 
       let letfn = Letfn { recursive; bind; arg; body; sig_ } in
-      Def (`Letfn letfn)
+      `Def (`Letfn letfn)
   | false, _ ->
       if Option.is_some recursive then
         can_error "canonicalize_defs"
           "non-closure definitions cannot be recursive";
       let letval = Letval { bind; body = (t_can_expr, can_expr); sig_ } in
-      Def (`Letval letval)
+      `Def (`Letval letval)
 
 let canonicalize_defs :
     ctx:ctx ->

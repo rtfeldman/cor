@@ -34,26 +34,28 @@ and expr =
   | Unit
   | Tag of string * e_expr list
   | Let of let_def * e_expr
-  | Clos of { arg : tvar * symbol; body : e_expr }
+  | Clos of { arg : typed_symbol; body : e_expr }
   | Call of e_expr * e_expr
   | KCall of kernelfn * e_expr list
   | When of e_expr * branch list
 
 and branch = e_pat * e_expr
 
+let name_of_letfn = function Letfn { bind = _, x; _ } -> x
+let name_of_letval = function Letval { bind = _, x; _ } -> x
 let type_of_letfn = function Letfn { bind = ty, _; _ } -> ty
 let type_of_letval = function Letval { bind = ty, _; _ } -> ty
 
-type def =
-  | Def of let_def
+type run_def =
   | Run of { bind : typed_symbol; body : e_expr; sig_ : tvar option }
 
+type def = [ `Def of let_def | `Run of run_def ]
 type program = def list
 
 let name_of_let_def = function
-  | `Letfn (Letfn { bind = _, x; _ }) -> x
-  | `Letval (Letval { bind = _, x; _ }) -> x
+  | `Letfn letfn -> name_of_letfn letfn
+  | `Letval letval -> name_of_letval letval
 
 let name_of_def = function
-  | Def let_def -> name_of_let_def let_def
-  | Run { bind = _, x; _ } -> x
+  | `Def let_def -> name_of_let_def let_def
+  | `Run (Run { bind = _, x; _ }) -> x

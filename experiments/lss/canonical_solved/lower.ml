@@ -163,14 +163,15 @@ let separate_tags tags1 ext1 tags2 ext2 =
   let result = walk [] [] [] (tags1, tags2) in
   (result, ext1, ext2)
 
-let unify : ctx -> tvar -> tvar -> unit =
- fun ctx t u ->
-  let rec unify_tags ctx visited (t1, args1) (t2, args2) =
+let unify : fresh_tvar -> tvar -> tvar -> unit =
+ fun fresh_tvar t u ->
+  let rec unify_tags fresh_tvar visited (t1, args1) (t2, args2) =
     assert (t1 = t2);
     if List.length args1 <> List.length args2 then
       failsolve "arity mismatch for tag" t1;
-    List.iter2 (unify ctx visited) (List.map snd args1) (List.map snd args2)
-  and unify ctx visited t u =
+    List.iter2 (unify fresh_tvar visited) (List.map snd args1)
+      (List.map snd args2)
+  and unify fresh_tvar visited t u =
     let t, u = (unlink t, unlink u) in
     let vart, varu = (tvar_v t, tvar_v u) in
     if vart = varu then ()
@@ -179,7 +180,7 @@ let unify : ctx -> tvar -> tvar -> unit =
         ("found recursive type variable " ^ show_tvar t)
     else
       let visited = (vart, varu) :: visited in
-      let unify = unify ctx visited in
+      let unify = unify fresh_tvar visited in
       let t' =
         match (tvar_deref t, tvar_deref u) with
         | Link _, _ | _, Link _ ->
@@ -217,7 +218,7 @@ let unify : ctx -> tvar -> tvar -> unit =
                   let shared : ty_tag list =
                     List.map
                       (fun (t1, t2) ->
-                        unify_tags ctx visited t1 t2;
+                        unify_tags fresh_tvar visited t1 t2;
                         t1)
                       shared
                   in
@@ -228,20 +229,20 @@ let unify : ctx -> tvar -> tvar -> unit =
                       TTag { tags; ext = (noloc, ext1) }
                   | (others, ext1), ([], ext2) | ([], ext2), (others, ext1) ->
                       let other_tag_union =
-                        ctx.fresh_tvar
+                        fresh_tvar
                         @@ Content (TTag { tags = others; ext = (noloc, ext1) })
                       in
                       unify ext2 other_tag_union;
                       let tags = sort_tags @@ shared @ others in
                       TTag { tags; ext = (noloc, ext1) }
                   | (others1, ext1), (others2, ext2) ->
-                      let new_ext = (noloc, ctx.fresh_tvar @@ Unbd None) in
+                      let new_ext = (noloc, fresh_tvar @@ Unbd None) in
                       let tags1 =
-                        ctx.fresh_tvar
+                        fresh_tvar
                         @@ Content (TTag { tags = others1; ext = new_ext })
                       in
                       let tags2 =
-                        ctx.fresh_tvar
+                        fresh_tvar
                         @@ Content (TTag { tags = others2; ext = new_ext })
                       in
                       unify ext1 tags2;
@@ -257,19 +258,19 @@ let unify : ctx -> tvar -> tvar -> unit =
             in
             Content c'
       in
-      let v = ctx.fresh_tvar @@ Unbd None in
+      let v = fresh_tvar @@ Unbd None in
       tvar_set t (Link v);
       tvar_set u (Link v);
       tvar_set v t'
   in
-  unify ctx [] t u
+  unify fresh_tvar [] t u
 
 let constrain_sig : ctx -> sig_:tvar option -> t:tvar -> unit =
  fun ctx ~sig_ ~t ->
   match sig_ with
   | Some sig_ ->
       let t_sig = inst ctx sig_ in
-      unify ctx t t_sig
+      unify ctx.fresh_tvar t t_sig
   | None -> ()
 
 let rec infer_expr : ctx -> venv -> e_expr -> tvar =
@@ -308,28 +309,28 @@ let rec infer_expr : ctx -> venv -> e_expr -> tvar =
         let t_f_wanted =
           ctx.fresh_tvar @@ Content (TFn ((noloc, t_a), (noloc, t_ret)))
         in
-        unify ctx t_f t_f_wanted;
+        unify ctx.fresh_tvar t_f t_f_wanted;
         t_ret
     | KCall (kernelfn, args) ->
         let ({ args = kargs; ret = kret } : kernel_sig) = kernel_sig kernelfn in
         let arg_tys = List.map (infer_expr ctx venv) @@ args in
         (match kargs with
-        | `Variadic t -> List.iter (unify ctx t) arg_tys
-        | `List kargs -> List.iter2 (unify ctx) kargs arg_tys);
+        | `Variadic t -> List.iter (unify ctx.fresh_tvar t) arg_tys
+        | `List kargs -> List.iter2 (unify ctx.fresh_tvar) kargs arg_tys);
         kret
     | When (e, bs) ->
         let t_e = infer_expr ctx venv e in
         let t_result = ctx.fresh_tvar @@ Unbd None in
         let go_branch (p, body) =
           let venv', t_p = infer_pat ctx venv p in
-          unify ctx t_e t_p;
+          unify ctx.fresh_tvar t_e t_p;
           let t_body = infer_expr ctx (venv' @ venv) body in
-          unify ctx t_result t_body
+          unify ctx.fresh_tvar t_result t_body
         in
         List.iter go_branch bs;
         t_result
   in
-  unify ctx t t';
+  unify ctx.fresh_tvar t t';
   t
 
 and infer_pat : ctx -> venv -> e_pat -> venv * tvar =
@@ -350,7 +351,7 @@ and infer_pat : ctx -> venv -> e_pat -> venv * tvar =
         let t = ctx.fresh_tvar @@ Unbd None in
         ([ (x, t) ], t)
   in
-  unify ctx t t';
+  unify ctx.fresh_tvar t t';
   (venv, t)
 
 and infer_let_def : ctx -> venv -> let_def -> tvar =
@@ -373,7 +374,7 @@ and infer_let_def : ctx -> venv -> let_def -> tvar =
 
       constrain_sig ctx ~sig_ ~t:t_fn;
 
-      unify ctx t_fn t_x;
+      unify ctx.fresh_tvar t_fn t_x;
       gen venv t_x;
       t_x
   | `Letval (Letval { bind = t_x, _; body; sig_ }) ->
@@ -381,19 +382,22 @@ and infer_let_def : ctx -> venv -> let_def -> tvar =
 
       constrain_sig ctx ~sig_ ~t:t_body;
 
-      unify ctx t_body t_x;
+      unify ctx.fresh_tvar t_body t_x;
       t_x
+
+let infer_run_def : ctx -> venv -> run_def -> tvar =
+ fun ctx venv (Run { bind = t_x, _; body; sig_ }) ->
+  let t_body = infer_expr ctx venv body in
+
+  constrain_sig ctx ~sig_ ~t:t_body;
+
+  unify ctx.fresh_tvar t_body t_x;
+  t_x
 
 let infer_def : ctx -> venv -> def -> tvar =
  fun ctx venv -> function
-  | Def let_def -> infer_let_def ctx venv let_def
-  | Run { bind = t_x, _; body; sig_ } ->
-      let t_body = infer_expr ctx venv body in
-
-      constrain_sig ctx ~sig_ ~t:t_body;
-
-      unify ctx t_body t_x;
-      t_x
+  | `Def let_def -> infer_let_def ctx venv let_def
+  | `Run run_def -> infer_run_def ctx venv run_def
 
 let infer : ctx -> program -> unit =
  fun ctx program ->
