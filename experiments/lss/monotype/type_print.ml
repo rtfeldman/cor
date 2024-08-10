@@ -38,7 +38,7 @@ let pp_ty : Format.formatter -> ty -> unit =
               go_tag t;
               if i < List.length tags - 1 then fprintf f ",@ ")
             tags;
-          fprintf f "@,]"
+          fprintf f "@,]@]"
       | TPrim `Str -> pp_print_string f "Str"
       | TPrim `Int -> pp_print_string f "Int"
       | TPrim `Unit -> pp_print_string f "{}"

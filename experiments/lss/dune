@@ -2,4 +2,4 @@
   (name lss)
   (libraries language
              syntax canonical canonical_solved
-             monotype))
+             monotype monotype_lifted))

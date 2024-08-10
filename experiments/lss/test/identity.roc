@@ -18,6 +18,7 @@ run idstr = id "hello";;
 > #   ^^^^^ Int
 > run idstr = id "hello";;
 > #   ^^^^^ Str
+> 
 
 > cor-out +monotype -print
 > let id2: Str -> Str = \x ->

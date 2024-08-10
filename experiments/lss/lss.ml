@@ -71,6 +71,17 @@ let monotype
   let monotype = Monotype.Lower.lower ctx canonical_solved in
   Ok { symbols; syntax; monotype }
 
+type monotype_lifted_program = {
+  symbols : Symbol.t;
+  syntax : Syntax.Ast.program;
+  monotype_lifted : Monotype_lifted.Ast.program;
+}
+
+let monotype_lifted ({ symbols; syntax; monotype } : monotype_program) =
+  let ctx = Monotype_lifted.Ctx.make ~symbols monotype in
+  let monotype_lifted = Monotype_lifted.Lower.lower ctx monotype in
+  Ok { symbols; syntax; monotype_lifted }
+
 let ( let* ) = Result.bind
 
 module Lss : LANGUAGE = struct
@@ -96,6 +107,13 @@ module Lss : LANGUAGE = struct
         let* p = solve p in
         let* { monotype; _ } = monotype p in
         Ok (Monotype.Print.string_of_program monotype)
+    | "monotype_lifted" ->
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* p = solve p in
+        let* p = monotype p in
+        let* { monotype_lifted; _ } = monotype_lifted p in
+        Ok (Monotype_lifted.Print.string_of_program monotype_lifted)
     | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
   let type_at loc s =

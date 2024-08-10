@@ -49,7 +49,7 @@ type preprocessed = {
   commands : (command, command_err) result list;
 }
 
-let re_cmds = Str.regexp {|# cor \+\([a-z]+\) -\([a-z]+\)|}
+let re_cmds = Str.regexp {|# cor \+\([a-z_]+\) -\([a-z_]+\)|}
 let re_query = Str.regexp {|\(\^+\)|}
 let starts_command = String.starts_with ~prefix:"# cor "
 let starts_out = String.starts_with ~prefix:"> "

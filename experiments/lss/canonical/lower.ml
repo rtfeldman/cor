@@ -257,7 +257,7 @@ let canonicalize_pat : S.e_pat -> e_pat * tvar SymbolMap.t =
     | S.PTag ((_, tag), ps) ->
         let can_pats, refs = List.split @@ List.map go_pat ps in
         let can_pat = (t, PTag (tag, can_pats)) in
-        let refs = List.fold_left SymbolMap.union SymbolMap.empty refs in
+        let refs = List.fold_left SymbolMap.union_uc SymbolMap.empty refs in
         (can_pat, refs)
   in
   go_pat
@@ -290,7 +290,7 @@ let canonicalize_expr e =
       | S.Tag (tag, es) ->
           let can_exprs, free_es = List.split @@ List.map go_expr es in
           let free_es =
-            List.fold_left SymbolMap.union SymbolMap.empty free_es
+            List.fold_left SymbolMap.union_uc SymbolMap.empty free_es
           in
           let can_tag = Tag (tag, can_exprs) in
           (can_tag, free_es)
@@ -332,7 +332,7 @@ let canonicalize_expr e =
                 Let (`Letval letval, body)
           in
 
-          (can_let, SymbolMap.union free_e free_b)
+          (can_let, SymbolMap.union_uc free_e free_b)
       | Clos { arg = _, (_, t_a), a; body } ->
           let body, free_b = go_expr body in
           let free = SymbolMap.remove a free_b in
@@ -341,12 +341,14 @@ let canonicalize_expr e =
       | Call (e1, e2) ->
           let can_e1, free_e1 = go_expr e1 in
           let can_e2, free_e2 = go_expr e2 in
-          let free = SymbolMap.union free_e1 free_e2 in
+          let free = SymbolMap.union_uc free_e1 free_e2 in
           let can_call = Call (can_e1, can_e2) in
           (can_call, free)
       | KCall (kfn, es) ->
           let can_es, free_es = List.split @@ List.map go_expr es in
-          let free = List.fold_left SymbolMap.union SymbolMap.empty free_es in
+          let free =
+            List.fold_left SymbolMap.union_uc SymbolMap.empty free_es
+          in
           let can_kcall = KCall (kfn, can_es) in
           (can_kcall, free)
       | When (e, branches) ->
@@ -355,9 +357,9 @@ let canonicalize_expr e =
             List.split @@ List.map go_branch branches
           in
           let free_branches =
-            List.fold_left SymbolMap.union SymbolMap.empty free_branches
+            List.fold_left SymbolMap.union_uc SymbolMap.empty free_branches
           in
-          let free = SymbolMap.union free_e free_branches in
+          let free = SymbolMap.union_uc free_e free_branches in
           let can_when = When (can_e, can_branches) in
           (can_when, free)
     in

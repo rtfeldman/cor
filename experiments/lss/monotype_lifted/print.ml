@@ -7,6 +7,9 @@ let pp_symbol f symbol =
 
 let pp_typed_symbol f (_, symbol) = Format.fprintf f "%a" pp_symbol symbol
 
+let pp_typed_symbol_t f (t, symbol) =
+  Format.fprintf f "@[<hov 2>%a:@ %a@]" pp_symbol symbol Type_print.pp_ty t
+
 let pp_pat f (p : e_pat) =
   let open Format in
   let int_of_parens_ctx = function `Free -> 1 | `Apply -> 2 in
@@ -63,18 +66,15 @@ let rec pp_expr f =
         in
         with_parens f (parens >> `Free) expr;
         fprintf f "@]"
-    | Let (def, rest) ->
+    | Let ((t, x), body, rest) ->
         fprintf f "@[<v 0>@[<hv 0>";
         let expr () =
-          pp_letdef f def;
+          fprintf f "@[<v 0>@[<v 2>let %a: %a =@ %a@]@]" pp_symbol x
+            Type_print.pp_ty t pp_expr body;
           fprintf f "@ in@]@,";
           go `Free rest
         in
         with_parens f (parens >> `Free) expr;
-        fprintf f "@]"
-    | Clos { arg = _, x; body = e; _ } ->
-        fprintf f "@[<hv 2>\\%a ->@ " pp_symbol x;
-        go `Apply e;
         fprintf f "@]"
     | Call (head, arg) ->
         fprintf f "@[";
@@ -109,29 +109,28 @@ let rec pp_expr f =
   in
   go `Free
 
-and pp_letdef f = function
-  | `Letfn letfn -> pp_letfn f letfn
-  | `Letval letval -> pp_letval f letval
-
-and pp_letfn f (Letfn { bind = t, x; arg; body; recursive }) =
+let pp_captures f =
   let open Format in
-  fprintf f "@[<v 0>@[<v 2>let%s %a: %a = \\%a ->@ %a@]@]"
-    (if recursive then " rec" else "")
-    pp_symbol x Type_print.pp_ty t pp_symbol (snd arg) pp_expr body
-
-and pp_letval f (Letval { bind; body; _ }) =
-  let open Format in
-  fprintf f "@[<v 0>@[<v 2>let %a: %a =@ %a@]@]" pp_symbol (snd bind)
-    Type_print.pp_ty (fst bind) pp_expr body
+  function
+  | [] -> ()
+  | captures ->
+      fprintf f "@[<hv 2>(%a)@]"
+        (pp_print_list ~pp_sep:pp_print_space pp_typed_symbol_t)
+        captures
 
 let pp_def : Format.formatter -> def -> unit =
- fun f def ->
+ fun f ((t, x), def) ->
   let open Format in
   match def with
-  | `Def letdef -> pp_letdef f letdef
-  | `Run (Run { bind; body }) ->
-      fprintf f "@[<v 0>@[<v 2>run %a: %a =@ %a@]@]" pp_symbol (snd bind)
-        Type_print.pp_ty (fst bind) pp_expr body
+  | `Fn { arg = _, a; captures; body; _ } ->
+      fprintf f "@[<v 0>@[<v 2>let %a%a: %a = \\%a ->@ %a@]@]" pp_symbol x
+        pp_captures captures Type_print.pp_ty t pp_symbol a pp_expr body
+  | `Val body ->
+      fprintf f "@[<v 0>@[<v 2>let %a: %a =@ %a@]@]" pp_symbol x
+        Type_print.pp_ty t pp_expr body
+  | `Run body ->
+      fprintf f "@[<v 0>@[<v 2>run %a: %a =@ %a@]@]" pp_symbol x
+        Type_print.pp_ty t pp_expr body
 
 let pp_defs : Format.formatter -> def list -> unit =
  fun f defs ->

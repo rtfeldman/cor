@@ -4,7 +4,9 @@
 
 (library
  (name language)
- (modules language))
+ (modules language)
+ (preprocess
+  (pps ppx_deriving.show)))
 
 (library
  (name roc)
@@ -12,4 +14,4 @@
  (libraries language sedlex menhirLib)
  (inline_tests)
  (preprocess
-  (pps ppx_inline_test sedlex.ppx)))
+  (pps ppx_inline_test sedlex.ppx ppx_deriving.show)))

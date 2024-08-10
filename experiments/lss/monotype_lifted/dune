@@ -1,0 +1,3 @@
+(library
+  (name monotype_lifted)
+  (libraries monotype symbol))

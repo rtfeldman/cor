@@ -17,9 +17,9 @@ let pp_pat f (p : e_pat) =
         fprintf f "@[<hv 2>";
         let printer () =
           fprintf f "%s" t;
-          List.iteri
-            (fun i p ->
-              if i > 0 then fprintf f "@ ";
+          List.iter
+            (fun p ->
+              fprintf f "@ ";
               go `Apply p)
             atoms
         in
