@@ -33,6 +33,8 @@ let intersperse f between fn iter =
       fn f i elt)
     iter
 
+let comma_sep ppf () = Format.pp_print_string ppf ", "
+
 let fresh_name_generator () =
   let taken = ref [] in
   let rec find hint i =

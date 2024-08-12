@@ -84,8 +84,8 @@ let monotype_lifted ({ symbols; syntax; monotype } : monotype_program) =
 
 type lambdasolved_program = {
   symbols : Symbol.t;
+  fresh_tvar : Lambdasolved.Type.fresh_tvar;
   syntax : Syntax.Ast.program;
-  monotype_lifted : Monotype_lifted.Ast.program;
   lambdasolved : Lambdasolved.Ast.program;
 }
 
@@ -93,7 +93,19 @@ let lambdasolved
     ({ symbols; syntax; monotype_lifted } : monotype_lifted_program) =
   let ctx = Lambdasolved.Ctx.make () in
   let lambdasolved = Lambdasolved.Lower.lower ctx monotype_lifted in
-  Ok { symbols; syntax; monotype_lifted; lambdasolved }
+  Ok { symbols; syntax; lambdasolved; fresh_tvar = ctx.fresh_tvar }
+
+type lambdamono_program = {
+  symbols : Symbol.t;
+  syntax : Syntax.Ast.program;
+  lambdamono : Lambdamono.Ast.program;
+}
+
+let lambdamono
+    ({ symbols; syntax; lambdasolved; fresh_tvar } : lambdasolved_program) =
+  let ctx = Lambdamono.Ctx.make ~symbols ~fresh_tvar lambdasolved in
+  let lambdamono = Lambdamono.Lower.lower ctx lambdasolved in
+  Ok { symbols; syntax; lambdamono }
 
 let ( let* ) = Result.bind
 
@@ -135,6 +147,15 @@ module Lss : LANGUAGE = struct
         let* p = monotype_lifted p in
         let* { lambdasolved; _ } = lambdasolved p in
         Ok (Lambdasolved.Print.string_of_program lambdasolved)
+    | "lambdamono" ->
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* p = solve p in
+        let* p = monotype p in
+        let* p = monotype_lifted p in
+        let* p = lambdasolved p in
+        let* { lambdamono; _ } = lambdamono p in
+        Ok (Lambdamono.Print.string_of_program lambdamono)
     | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
   let type_at loc s =

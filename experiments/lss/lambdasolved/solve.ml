@@ -332,10 +332,9 @@ let infer_expr : Ctx.t -> venv -> e_expr -> ty =
 
 let infer_fn : Ctx.t -> venv -> symbol -> fn -> ty =
  fun ctx venv lambda { arg = t_a, a; captures; body } ->
-  let captures = List.map (fun (t, x) -> (x, t)) captures in
-  let venv' = ((a, t_a) :: captures) @ venv in
+  let captures_list = SymbolMap.bindings captures in
+  let venv' = ((a, t_a) :: captures_list) @ venv in
   let t_ret = infer_expr ctx venv' body in
-  let captures = SymbolMap.of_seq @@ List.to_seq captures in
   let t_lset =
     ctx.fresh_tvar @@ Content (LSet (SymbolMap.singleton lambda captures))
   in

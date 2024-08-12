@@ -2,6 +2,7 @@
 # cor +monotype -print
 # cor +monotype_lifted -print
 # cor +lambdasolved -print
+# cor +lambdamono -print
 
 let id = \x -> x;;
 run run1 =
@@ -56,3 +57,27 @@ run run2 = id (\x -> x) 2;;
 >   x2
 > run run2: Int =
 >   (id1 clos1) 2
+
+> cor-out +lambdamono -print
+> fn clos3(x2: Int): Int =
+>   x2
+> fn id3(x: [Clos1]): [Clos1] =
+>   x
+> fn clos2(x1: Int, captures4: {n: Int}): Int =
+>   let n: Int = captures4.n in
+>   ~add x1 n
+> fn id2(x: [Clos {n: Int}]): [Clos {n: Int}] =
+>   x
+> run run1: Int =
+>   let n: Int = 1 in
+>   when when Id1 is
+>          | Id1 -> id2(Clos {n: n})
+>        end is
+>     | Clos captures1 -> clos2(1, captures1)
+>   end
+> run run2: Int =
+>   when when Id1 is
+>          | Id1 -> id3(Clos1)
+>        end is
+>     | Clos1 -> clos3(2)
+>   end

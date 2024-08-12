@@ -19,14 +19,16 @@ and expr =
   | Str of string
   | Unit
   | Tag of string * e_expr list
+  | Record of (string * e_expr) list
+  | Access of e_expr * string
   | Let of typed_symbol * e_expr * e_expr
-  | Call of e_expr * e_expr
+  | Call of symbol * e_expr list
   | KCall of kernelfn * e_expr list
   | When of e_expr * branch list
 
 and branch = e_pat * e_expr
 
-type fn = { arg : typed_symbol; captures : ty SymbolMap.t; body : e_expr }
+type fn = { args : typed_symbol list; body : e_expr }
 type def_val = [ `Fn of fn | `Val of e_expr | `Run of e_expr ]
-type def = typed_symbol * def_val
+type def = symbol * def_val
 type program = def list

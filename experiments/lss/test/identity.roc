@@ -2,6 +2,7 @@
 # cor +monotype -print
 # cor +monotype_lifted -print
 # cor +lambdasolved -print
+# cor +lambdamono -print
 
 let id = \x -> x;;
 #   ^^
@@ -51,3 +52,17 @@ run idstr = id "hello";;
 >   id1 1
 > run idstr: Str =
 >   id2 "hello"
+
+> cor-out +lambdamono -print
+> fn id4(x: Str): Str =
+>   x
+> fn id3(x: Int): Int =
+>   x
+> run idint: Int =
+>   when Id1 is
+>     | Id1 -> id3(1)
+>   end
+> run idstr: Str =
+>   when Id2 is
+>     | Id2 -> id4("hello")
+>   end

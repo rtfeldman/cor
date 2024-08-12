@@ -1,5 +1,6 @@
 open Ast
 open Type
+open Symbol
 module M = Monotype_lifted.Ast
 module T = Monotype_lifted.Type
 
@@ -56,7 +57,11 @@ let inst_expr ~fresh_tvar (e : M.e_expr) =
 
 let inst_fn ~fresh_tvar ({ arg; captures; body } : M.fn) =
   let arg = inst_typed_symbol ~fresh_tvar arg in
-  let captures = List.map (inst_typed_symbol ~fresh_tvar) captures in
+  let captures =
+    List.map (inst_typed_symbol ~fresh_tvar) captures
+    |> List.map (fun (t, x) -> (x, t))
+    |> List.to_seq |> SymbolMap.of_seq
+  in
   let body = inst_expr ~fresh_tvar body in
   { arg; captures; body }
 

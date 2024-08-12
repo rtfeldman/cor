@@ -2,8 +2,6 @@ open Canonical_solved.Type
 
 type ty_cache = (variable * tvar) list ref
 
-let fresh_ty_cache () = ref []
-
 let clone_inst : fresh_tvar -> ty_cache -> tvar -> tvar =
  fun fresh_tvar cache tvar ->
   let rec go_loc : loc_tvar -> loc_tvar = fun (l, t) -> (l, go t)

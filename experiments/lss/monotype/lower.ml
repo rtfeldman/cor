@@ -101,6 +101,8 @@ let specialize_let_val ~ctx ~ty_cache (C.Letval { bind = t, name; body; _ }) =
   let letval = Letval { bind = (t, name); body } in
   `Letval letval
 
+let fresh_ty_cache () = ref []
+
 let specialize_run_def ctx (C.Run { bind = t, name; body; _ }) =
   let ty_cache = fresh_ty_cache () in
   let t = lower_type @@ clone_inst ctx.fresh_tvar ty_cache t in

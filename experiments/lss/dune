@@ -3,4 +3,4 @@
   (libraries language
              syntax canonical canonical_solved
              monotype monotype_lifted
-             lambdasolved))
+             lambdasolved lambdamono))

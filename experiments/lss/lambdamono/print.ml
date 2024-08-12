@@ -7,8 +7,8 @@ let pp_symbol f symbol =
 
 let pp_typed_symbol f (_, symbol) = Format.fprintf f "%a" pp_symbol symbol
 
-let pp_typed_symbol_t f (symbol, t) =
-  Format.fprintf f "@[<hov 2>%a:@ %a@]" pp_symbol symbol Type_print.pp_ty_top t
+let pp_typed_symbol_t f (t, symbol) =
+  Format.fprintf f "@[<hov 2>%a:@ %a@]" pp_symbol symbol Type_print.pp_ty t
 
 let pp_pat f (p : e_pat) =
   let open Format in
@@ -56,34 +56,45 @@ let rec pp_expr f =
     | Tag (tag, payloads) ->
         fprintf f "@[<v 0>";
         let expr () =
-          fprintf f "@[<hv 2>%s@ " tag;
-          List.iteri
-            (fun i p ->
-              if i > 0 then fprintf f "@ ";
+          fprintf f "@[<hv 2>%s" tag;
+          List.iter
+            (fun p ->
+              fprintf f "@ ";
               go `Apply p)
             payloads;
           fprintf f "@]"
         in
         with_parens f (parens >> `Free) expr;
         fprintf f "@]"
+    | Record fields ->
+        fprintf f "@[<hv 2>{@,";
+        List.iteri
+          (fun i (field, t) ->
+            fprintf f "%s:@ " field;
+            go `Free t;
+            if i < List.length fields - 1 then fprintf f ",@ ")
+          fields;
+        fprintf f "@,}@]"
+    | Access (e, field) ->
+        fprintf f "@[<hv 2>";
+        go `Free e;
+        fprintf f ".%s@]" field
     | Let ((t, x), body, rest) ->
         fprintf f "@[<v 0>@[<hv 0>";
         let expr () =
-          fprintf f "@[<v 0>@[<v 2>let %a: %a =@ %a@]@]" pp_symbol x
-            Type_print.pp_ty_top t pp_expr body;
+          fprintf f "@[<v 0>@[<hov 2>let %a: %a =@ %a@]@]" pp_symbol x
+            Type_print.pp_ty t pp_expr body;
           fprintf f "@ in@]@,";
           go `Free rest
         in
         with_parens f (parens >> `Free) expr;
         fprintf f "@]"
-    | Call (head, arg) ->
+    | Call (head, args) ->
         fprintf f "@[";
         let expr () =
-          fprintf f "@[<hv 2>";
-          go `Apply head;
-          fprintf f "@ ";
-          go `Apply arg;
-          fprintf f "@]"
+          fprintf f "@[<hv 2>%a(%a)@]" pp_symbol head
+            (Format.pp_print_list ~pp_sep:comma_sep pp_expr)
+            args
         in
         with_parens f (parens >> `Free) expr;
         fprintf f "@]"
@@ -118,20 +129,28 @@ let pp_captures f =
         (pp_print_list ~pp_sep:pp_print_space pp_typed_symbol_t)
         captures
 
+let pp_args f =
+  let open Format in
+  function
+  | [] -> ()
+  | args ->
+      fprintf f "@[<hv 2>%a@]"
+        (pp_print_list ~pp_sep:comma_sep pp_typed_symbol_t)
+        args
+
 let pp_def : Format.formatter -> def -> unit =
- fun f ((t, x), def) ->
+ fun f (x, def) ->
   let open Format in
   match def with
-  | `Fn { arg = _, a; captures; body; _ } ->
-      let captures = Symbol.SymbolMap.bindings captures in
-      fprintf f "@[<v 0>@[<v 2>let %a%a: %a = \\%a ->@ %a@]@]" pp_symbol x
-        pp_captures captures Type_print.pp_ty_top t pp_symbol a pp_expr body
+  | `Fn { args; body } ->
+      fprintf f "@[<v 0>@[<v 2>fn %a(%a): %a =@ %a@]@]" pp_symbol x pp_args args
+        Type_print.pp_ty (fst body) pp_expr body
   | `Val body ->
       fprintf f "@[<v 0>@[<v 2>let %a: %a =@ %a@]@]" pp_symbol x
-        Type_print.pp_ty_top t pp_expr body
+        Type_print.pp_ty (fst body) pp_expr body
   | `Run body ->
       fprintf f "@[<v 0>@[<v 2>run %a: %a =@ %a@]@]" pp_symbol x
-        Type_print.pp_ty_top t pp_expr body
+        Type_print.pp_ty (fst body) pp_expr body
 
 let pp_defs : Format.formatter -> def list -> unit =
  fun f defs ->

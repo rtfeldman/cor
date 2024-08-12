@@ -1,3 +1,4 @@
 (library
   (name lambdasolved)
-  (libraries monotype_lifted symbol))
+  (libraries monotype_lifted symbol)
+  (preprocess (pps ppx_deriving.show)))
