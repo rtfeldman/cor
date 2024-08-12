@@ -1,5 +1,7 @@
 # cor +solve -elab
 # cor +monotype -print
+# cor +monotype_lifted -print
+# cor +lambdasolved -print
 
 let id = \x -> x;;
 #   ^^
@@ -24,6 +26,26 @@ run idstr = id "hello";;
 > let id2: Str -> Str = \x ->
 >   x
 > let id1: Int -> Int = \x ->
+>   x
+> run idint: Int =
+>   id1 1
+> run idstr: Str =
+>   id2 "hello"
+
+> cor-out +monotype_lifted -print
+> let id2: Str -> Str = \x ->
+>   x
+> let id1: Int -> Int = \x ->
+>   x
+> run idint: Int =
+>   id1 1
+> run idstr: Str =
+>   id2 "hello"
+
+> cor-out +lambdasolved -print
+> let id2: Str -[id2]-> Str = \x ->
+>   x
+> let id1: Int -[id1]-> Int = \x ->
 >   x
 > run idint: Int =
 >   id1 1

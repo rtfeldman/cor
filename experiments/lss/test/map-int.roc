@@ -1,6 +1,7 @@
 # cor +canonicalize -print
 # cor +monotype -print
 # cor +monotype_lifted -print
+# cor +lambdasolved -print
 
 let map = \x ->
   let f = \y -> ~add y x in
@@ -29,6 +30,14 @@ run main = map 1;;
 > let f(x: Int): Int -> Int = \y ->
 >   ~add y x
 > let map1: Int -> Int = \x ->
+>   f 1
+> run main: Int =
+>   map1 1
+
+> cor-out +lambdasolved -print
+> let f(x: Int): Int -[f (x: Int)]-> Int = \y ->
+>   ~add y x
+> let map1: Int -[map1]-> Int = \x ->
 >   f 1
 > run main: Int =
 >   map1 1

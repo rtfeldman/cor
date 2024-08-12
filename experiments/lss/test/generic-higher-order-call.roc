@@ -1,6 +1,7 @@
 # cor +canonicalize -print
 # cor +monotype -print
 # cor +monotype_lifted -print
+# cor +lambdasolved -print
 
 let id = \x -> x;;
 run run1 =
@@ -38,6 +39,20 @@ run run2 = id (\x -> x) 2;;
 >     1 in
 >   (id1 clos) 1
 > let clos1: Int -> Int = \x2 ->
+>   x2
+> run run2: Int =
+>   (id1 clos1) 2
+
+> cor-out +lambdasolved -print
+> let id1: (Int -<'21>-> Int) -[id1]-> Int -<'21>-> Int = \x ->
+>   x
+> let clos(n: Int): Int -[clos (n: Int)]-> Int = \x1 ->
+>   ~add x1 n
+> run run1: Int =
+>   let n: Int =
+>     1 in
+>   (id1 clos) 1
+> let clos1: Int -[clos1]-> Int = \x2 ->
 >   x2
 > run run2: Int =
 >   (id1 clos1) 2

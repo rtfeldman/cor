@@ -69,6 +69,7 @@ module SymbolMap = struct
     List.fold_left (union ~checked ~pp) empty lst
 
   let concat_uc ?(pp = fun _ -> "") lst = concat ~checked:false ~pp lst
+  let symmetric_diff u v = union (diff u v) (diff v u)
 end
 
 module SymbolSet = struct
