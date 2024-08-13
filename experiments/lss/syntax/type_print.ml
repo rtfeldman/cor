@@ -133,7 +133,7 @@ let pp_tvar :
     let inner f () =
       if List.mem var visited then
         (* This is a recursive type *)
-        fprintf f "@[<rec>@]"
+        fprintf f "@[<v 0><rec>@]"
       else
         let visited = var :: visited in
         match tvar_deref t with

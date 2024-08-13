@@ -10,13 +10,16 @@ type ctx = {
   specializations : Specializations.t;
 }
 
-let specialize_expr ~ctx ~ty_cache expr =
+let specialize_expr ~ctx ~ty_cache ~mono_cache expr =
+  let lower_type = lower_type mono_cache in
   let rec go (t, e) =
     let t = clone_inst ctx.fresh_tvar ty_cache t in
     let e =
       match e with
       | C.Var x -> (
-          match Specializations.specialize_fn ctx.specializations x t with
+          match
+            Specializations.specialize_fn ctx.specializations mono_cache x t
+          with
           | Some y -> Var y
           | None -> Var x (* No specialization needed *))
       | C.Int i -> Int i
@@ -80,34 +83,38 @@ let specialize_expr ~ctx ~ty_cache expr =
   in
   go expr
 
-let specialize_let_fn ~ctx ~ty_cache ~t_new ~name_new
+let specialize_let_fn ~ctx ~ty_cache ~mono_cache ~t_new ~name_new
     (C.Letfn { recursive; bind = t, name; arg = t_arg, arg_sym; body; _ }) =
   Option.iter (fun r -> assert (r = name)) recursive;
   let t = clone_inst ctx.fresh_tvar ty_cache t in
   Canonical_solved.Lower.unify ctx.fresh_tvar t t_new;
-  let t = lower_type t in
+  let t = lower_type mono_cache t in
 
-  let t_arg = lower_type @@ clone_inst ctx.fresh_tvar ty_cache t_arg in
-  let body = specialize_expr ~ctx ~ty_cache body in
+  let t_arg =
+    lower_type mono_cache @@ clone_inst ctx.fresh_tvar ty_cache t_arg
+  in
+  let body = specialize_expr ~ctx ~ty_cache ~mono_cache body in
   let recursive = Option.is_some recursive in
   let letfn =
     Letfn { recursive; bind = (t, name_new); arg = (t_arg, arg_sym); body }
   in
   `Letfn letfn
 
-let specialize_let_val ~ctx ~ty_cache (C.Letval { bind = t, name; body; _ }) =
-  let t = lower_type @@ clone_inst ctx.fresh_tvar ty_cache t in
-  let body = specialize_expr ~ctx ~ty_cache body in
+let specialize_let_val ~ctx ~ty_cache ~mono_cache
+    (C.Letval { bind = t, name; body; _ }) =
+  let t = lower_type mono_cache @@ clone_inst ctx.fresh_tvar ty_cache t in
+  let body = specialize_expr ~ctx ~ty_cache ~mono_cache body in
   let letval = Letval { bind = (t, name); body } in
   `Letval letval
 
-let fresh_ty_cache () = ref []
+let fresh_ty_cache () : ty_cache = ref []
 
 let specialize_run_def ctx (C.Run { bind = t, name; body; _ }) =
   let ty_original = t in
   let ty_cache = fresh_ty_cache () in
-  let t = lower_type @@ clone_inst ctx.fresh_tvar ty_cache t in
-  let body = specialize_expr ~ctx ~ty_cache:(fresh_ty_cache ()) body in
+  let mono_cache = fresh_mono_cache () in
+  let t = lower_type mono_cache @@ clone_inst ctx.fresh_tvar ty_cache t in
+  let body = specialize_expr ~ctx ~ty_cache ~mono_cache body in
   Run { bind = (t, name); body; ty = ty_original }
 
 let make_context ~symbols ~fresh_tvar program =
@@ -123,9 +130,10 @@ let loop_specializations : ctx -> unit =
     match Specializations.next_needed_specialization ctx.specializations with
     | None -> ()
     | Some { def; name_new; t_new; specialized } ->
+        let ty_cache = fresh_ty_cache () in
+        let mono_cache = fresh_mono_cache () in
         let def =
-          specialize_let_fn ~ctx ~ty_cache:(fresh_ty_cache ()) ~t_new ~name_new
-            def
+          specialize_let_fn ~ctx ~ty_cache ~mono_cache ~t_new ~name_new def
         in
         specialized := Some (`Def def);
         go ()

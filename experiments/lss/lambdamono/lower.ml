@@ -38,7 +38,7 @@ let specialize_expr ~ctx ~ty_cache expr =
           let args = List.map go args in
           Tag (t, args)
       | M.Let ((t_x, x), body, rest) ->
-          let bind = (lower_type t_x, x) in
+          let bind = (lower_tvar t_x, x) in
           let body = go body in
           let rest = go rest in
           Let (bind, body, rest)
@@ -82,13 +82,13 @@ let specialize_expr ~ctx ~ty_cache expr =
           let branches = List.map go_branch branches in
           When (e, branches)
     in
-    (lower_type t, e)
+    (lower_tvar t, e)
   and go_branch (p, e) =
     let p = go_pat p in
     let e = go e in
     (p, e)
   and go_pat (t, p) =
-    let t = lower_type @@ clone_inst ctx.fresh_tvar ty_cache t in
+    let t = lower_tvar @@ clone_inst ctx.fresh_tvar ty_cache t in
     let p =
       match p with
       | M.PVar x -> PVar x
@@ -107,7 +107,7 @@ let specialize_fn ~ctx ~ty_cache ~t_new ~t
   let t = clone_inst ctx.fresh_tvar ty_cache t in
   Lambdasolved.Solve.unify ctx.fresh_tvar t t_new;
 
-  let t_arg = lower_type @@ clone_inst ctx.fresh_tvar ty_cache t_arg in
+  let t_arg = lower_tvar @@ clone_inst ctx.fresh_tvar ty_cache t_arg in
   let body = specialize_expr ~ctx ~ty_cache body in
 
   if SymbolMap.is_empty captures then { args = [ (t_arg, arg) ]; body }
@@ -118,7 +118,7 @@ let specialize_fn ~ctx ~ty_cache ~t_new ~t
     let body =
       SymbolMap.fold
         (fun x t body ->
-          let t = lower_type t in
+          let t = lower_tvar t in
           let captures_arg = (t_captures, Var captures_sym) in
           let access = (t, Access (captures_arg, Symbol.show_symbol_raw x)) in
           let bind = (t, x) in

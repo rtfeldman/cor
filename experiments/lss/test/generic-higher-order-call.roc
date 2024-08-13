@@ -47,7 +47,7 @@ run run2 = id (\x -> x) 2;;
 >   (id1 clos1) 2
 
 > cor-out +lambdasolved -print
-> let id1: (Int -<'21>-> Int) -[id1]-> Int -<'21>-> Int = \x ->
+> let id1: Int -<'1003>-> Int -[id1]-> Int -<'1003>-> Int = \x ->
 >   x
 > let clos(n: Int): Int -[clos (n: Int)]-> Int = \x1 ->
 >   ~add x1 n

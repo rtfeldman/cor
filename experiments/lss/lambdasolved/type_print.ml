@@ -12,7 +12,7 @@ let pp_named f var c =
   let (`Var i) = var in
   Format.fprintf f "<%c%d>" c i
 
-let rec pp_tvar visited _ctx f t =
+let pp_ty f (t : tvar) =
   let open Format in
   let rec go_lambda : variable list -> symbol -> captures -> unit =
    fun visited lambda captures ->
@@ -21,72 +21,55 @@ let rec pp_tvar visited _ctx f t =
     List.iter
       (fun (x, t) ->
         fprintf f "@ (%a: " pp_symbol x;
-        (pp_ty visited `AppHead) f t;
+        (go visited `AppHead) f t;
         fprintf f ")")
       captures;
     fprintf f "@]"
-  and go visited t =
+  and go visited ctx f (t : tvar) =
     let t = unlink t in
     let var = tvar_v t in
-    let inner f () =
-      if List.mem var visited then
-        (* This is a recursive type *)
-        fprintf f "@[<rec>@]"
-      else
-        let visited = var :: visited in
-        match tvar_deref t with
-        | Unbd -> pp_named f var '?'
-        | ForA -> pp_named f var '\''
-        | Link t -> go visited t
-        | Content (LSet lambdas) ->
-            fprintf f "@[<hv 2>[@,";
-            let lambdas = Symbol.SymbolMap.bindings lambdas in
-            List.iteri
-              (fun i (lambda, captures) ->
-                go_lambda visited lambda captures;
-                if i < List.length lambdas - 1 then fprintf f ",@ ")
-              lambdas;
-            fprintf f "@,]@]"
-    in
-    inner f ()
-  in
-  go visited t
-
-and pp_ty visited ctx f ty =
-  let open Format in
-  let rec go_tag (tag_name, payloads) =
+    if List.mem var visited then
+      (* This is a recursive type *)
+      fprintf f "@[<rec>@]"
+    else
+      let visited = var :: visited in
+      match tvar_deref t with
+      | Unbd -> pp_named f var '?'
+      | ForA -> pp_named f var '\''
+      | Link t -> go visited `Free f t
+      | Content (LSet lambdas) ->
+          fprintf f "@[<hv 2>[@,";
+          let lambdas = Symbol.SymbolMap.bindings lambdas in
+          List.iteri
+            (fun i (lambda, captures) ->
+              go_lambda visited lambda captures;
+              if i < List.length lambdas - 1 then fprintf f ",@ ")
+            lambdas;
+          fprintf f "@,]@]"
+      | Content (TFn (a, tvar, b)) ->
+          fprintf f "@[<hov 2>";
+          let pty () =
+            fprintf f "%a@ -@[%a@]-> %a" (go visited `Free) a (go visited `Free)
+              tvar (go visited `Free) b
+          in
+          with_parens f (ctx >> `Free) pty;
+          fprintf f "@]"
+      | Content (TTag tags) ->
+          fprintf f "@[<hv 2>[@,";
+          pp_print_list
+            ~pp_sep:(fun f () -> fprintf f ",@ ")
+            (go_tag visited) f tags;
+          fprintf f "@,]@]"
+      | Content (TPrim `Str) -> pp_print_string f "Str"
+      | Content (TPrim `Int) -> pp_print_string f "Int"
+      | Content (TPrim `Unit) -> pp_print_string f "{}"
+  and go_tag visited f ((tag_name, payloads) : ty_tag) =
     fprintf f "@[<hov 2>%s" tag_name;
-    List.iter
-      (fun p ->
-        fprintf f "@ ";
-        go `AppHead p)
-      payloads;
+    List.iter (fun p -> fprintf f "@ %a" (go visited `AppHead) p) payloads;
     fprintf f "@]"
-  and go ctx ty =
-    match ty with
-    | TFn (a, tvar, b) ->
-        fprintf f "@[<hov 2>";
-        let pty () =
-          go `FnHead a;
-          fprintf f "@ -@[%a@]-> " (pp_tvar visited `Free) tvar;
-          go `Free b
-        in
-        with_parens f (ctx >> `Free) pty;
-        fprintf f "@]"
-    | TTag tags ->
-        fprintf f "@[<hv 2>[@,";
-        List.iteri
-          (fun i t ->
-            go_tag t;
-            if i < List.length tags - 1 then fprintf f ",@ ")
-          tags;
-        fprintf f "@,]@]"
-    | TPrim `Str -> pp_print_string f "Str"
-    | TPrim `Int -> pp_print_string f "Int"
-    | TPrim `Unit -> pp_print_string f "{}"
   in
-  go ctx ty
+  go [] `Free f t
 
-let pp_ty_top f ty = pp_ty [] `Free f ty
-let show_tvar tvar = Format.asprintf "%a" (pp_tvar [] `Free) tvar
-let show_ty ty = Format.asprintf "%a" (pp_ty [] `Free) ty
+let pp_ty_top f ty = pp_ty f ty
+let show_tvar tvar = Format.asprintf "%a" pp_ty tvar
+let show_ty ty = Format.asprintf "%a" pp_ty ty

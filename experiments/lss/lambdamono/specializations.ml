@@ -8,16 +8,16 @@ module T = Lambdasolved.Type
 type specialization_key = { name : symbol; arg : ty; captures : ty; ret : ty }
 
 type specialization = {
-  t_fn : T.ty;
+  t_fn : T.tvar;
   fn : M.fn;
-  t_new : T.ty;
+  t_new : T.tvar;
   name_new : symbol;
   specialized : fn option ref;
 }
 
 type t = {
   symbols : Symbol.t;
-  fenv : (symbol * (T.ty * M.fn)) list;
+  fenv : (symbol * (T.tvar * M.fn)) list;
   specializations : (specialization_key * specialization) list ref;
 }
 
@@ -30,14 +30,14 @@ let make : Symbol.t -> M.program -> t =
   in
   { symbols; fenv; specializations = ref [] }
 
-let specialize_fn : t -> symbol -> T.ty -> symbol option =
+let specialize_fn : t -> symbol -> T.tvar -> symbol option =
  fun t name t_new ->
   let ( let* ) = Option.bind in
   let* t_fn, fn = List.assoc_opt name t.fenv in
   let { ty = captures; _ } = extract_closure_captures t_new name in
   let in', _lset, out' = extract_fn t_new in
   let specialization_key =
-    { name; captures; arg = lower_type in'; ret = lower_type out' }
+    { name; captures; arg = lower_tvar in'; ret = lower_tvar out' }
   in
   match List.assoc_opt specialization_key !(t.specializations) with
   | Some { name_new; _ } -> Some name_new

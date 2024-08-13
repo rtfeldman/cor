@@ -86,4 +86,5 @@ let () =
   try main ()
   with Failure msg ->
     prerr_endline ("Error: " ^ msg);
+    prerr_string (Printexc.get_backtrace ());
     flush_all ()

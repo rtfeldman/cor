@@ -176,8 +176,11 @@ let unify : fresh_tvar -> tvar -> tvar -> unit =
     let vart, varu = (tvar_v t, tvar_v u) in
     if vart = varu then ()
     else if List.mem (vart, varu) visited then
+      (*
       failsolve "recursive type variable"
         ("found recursive type variable " ^ show_tvar t)
+      *)
+      ()
     else
       let visited = (vart, varu) :: visited in
       let unify = unify fresh_tvar visited in
@@ -293,7 +296,7 @@ let rec infer_expr : ctx -> venv -> e_expr -> tvar =
         let ext = (noloc, ctx.fresh_tvar @@ Unbd None) in
         ctx.fresh_tvar @@ Content (TTag { tags = [ (tag, arg_tys) ]; ext })
     | Let (let_def, rest) ->
-        let let_def_t = infer_let_def ctx venv let_def in
+        let let_def_t = infer_let_def ~nested:true ctx venv let_def in
         let let_def_s = name_of_let_def let_def in
         let venv' = (let_def_s, let_def_t) :: venv in
         infer_expr ctx venv' rest
@@ -354,8 +357,8 @@ and infer_pat : ctx -> venv -> e_pat -> venv * tvar =
   unify ctx.fresh_tvar t t';
   (venv, t)
 
-and infer_let_def : ctx -> venv -> let_def -> tvar =
- fun ctx venv -> function
+and infer_let_def : nested:bool -> ctx -> venv -> let_def -> tvar =
+ fun ~nested ctx venv -> function
   | `Letfn (Letfn { recursive; bind = t_x, x; arg = t_a, a; body; sig_ }) ->
       let recursive_binding =
         match recursive with
@@ -375,7 +378,7 @@ and infer_let_def : ctx -> venv -> let_def -> tvar =
       constrain_sig ctx ~sig_ ~t:t_fn;
 
       unify ctx.fresh_tvar t_fn t_x;
-      gen venv t_x;
+      if not nested then gen venv t_x;
       t_x
   | `Letval (Letval { bind = t_x, _; body; sig_ }) ->
       let t_body = infer_expr ctx venv body in
@@ -396,7 +399,7 @@ let infer_run_def : ctx -> venv -> run_def -> tvar =
 
 let infer_def : ctx -> venv -> def -> tvar =
  fun ctx venv -> function
-  | `Def let_def -> infer_let_def ctx venv let_def
+  | `Def let_def -> infer_let_def ~nested:false ctx venv let_def
   | `Run run_def -> infer_run_def ctx venv run_def
 
 let infer : ctx -> program -> unit =

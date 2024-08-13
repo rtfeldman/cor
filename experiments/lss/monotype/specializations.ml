@@ -32,9 +32,9 @@ let make : Symbol.t -> C.program -> t =
   in
   { symbols; fenv; specializations = ref [] }
 
-let specialize_fn : t -> symbol -> T.tvar -> symbol option =
- fun t name t_new ->
-  let specialization = (name, lower_type t_new) in
+let specialize_fn : t -> mono_cache -> symbol -> T.tvar -> symbol option =
+ fun t mono_cache name t_new ->
+  let specialization = (name, lower_type mono_cache t_new) in
 
   match List.assoc_opt specialization !(t.specializations) with
   | Some { name_new; _ } -> Some name_new

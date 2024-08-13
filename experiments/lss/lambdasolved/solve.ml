@@ -2,7 +2,7 @@ open Ast
 open Type
 open Symbol
 
-type venv = (Symbol.symbol * ty) list
+type venv = (Symbol.symbol * tvar) list
 
 let show_venv venv =
   let show (x, t) = Symbol.show_symbol_raw x ^ ": " ^ Type_print.show_ty t in
@@ -10,42 +10,40 @@ let show_venv venv =
 
 let get_keys lset = SymbolMap.bindings lset |> List.map fst |> SymbolSet.of_list
 
-let is_generalized : ty -> bool =
+let is_generalized : tvar -> bool =
  fun t ->
   let visited = ref [] in
-  let rec is_generalized_tvar t =
+  let rec is_generalized t =
+    let t = unlink t in
     let var = tvar_v t in
     if List.mem var !visited then false
     else (
       visited := var :: !visited;
       match tvar_deref t with
       | Unbd -> false
-      | Link t -> is_generalized_tvar t
+      | Link _ -> failwith "found a link after unlinking"
       | ForA -> true
       | Content (LSet lset) ->
           SymbolMap.exists
             (fun _ captures ->
-              SymbolMap.exists (fun _ t -> is_generalized_ty t) captures)
-            lset)
-  and is_generalized_ty : ty -> bool = function
-    | TFn (tin, tlset, tout) ->
-        is_generalized_ty tin || is_generalized_tvar tlset
-        || is_generalized_ty tout
-    | TTag tags ->
-        List.exists
-          (fun (_, captures) -> List.exists is_generalized_ty captures)
-          tags
-    | TPrim _ -> false
+              SymbolMap.exists (fun _ t -> is_generalized t) captures)
+            lset
+      | Content (TFn (tin, tlset, tout)) ->
+          is_generalized tin || is_generalized tlset || is_generalized tout
+      | Content (TTag tags) ->
+          List.exists
+            (fun (_, captures) -> List.exists is_generalized captures)
+            tags
+      | Content (TPrim _) -> false)
   in
+  is_generalized t
 
-  is_generalized_ty t
-
-let inst : fresh_tvar -> ty -> ty =
+let inst : fresh_tvar -> tvar -> tvar =
  fun fresh_tvar gt ->
   if not (is_generalized gt) then gt
   else
     let tenv : (variable * tvar) list ref = ref [] in
-    let rec inst_tvar gt =
+    let rec inst gt =
       let var = tvar_v gt in
       match List.assoc_opt var !tenv with
       | Some t -> t
@@ -55,34 +53,35 @@ let inst : fresh_tvar -> ty -> ty =
           let t' =
             match tvar_deref gt with
             | Unbd -> gt
-            | Link t -> inst_tvar t
+            | Link t -> inst t
             | ForA -> fresh_tvar Unbd
             | Content (LSet lset) ->
                 let lset =
                   SymbolMap.map
-                    (fun captures -> SymbolMap.map inst_ty captures)
+                    (fun captures -> SymbolMap.map inst captures)
                     lset
                 in
                 fresh_tvar @@ Content (LSet lset)
+            | Content (TFn (tin, tlset, tout)) ->
+                fresh_tvar @@ Content (TFn (inst tin, inst tlset, inst tout))
+            | Content (TTag tags) ->
+                let tags =
+                  List.map
+                    (fun (tag, captures) -> (tag, List.map inst captures))
+                    tags
+                in
+                fresh_tvar @@ Content (TTag tags)
+            | Content (TPrim prim) -> fresh_tvar @@ Content (TPrim prim)
           in
           tvar_set t (Link t');
           t
-    and inst_ty = function
-      | TFn (tin, tlset, tout) ->
-          TFn (inst_ty tin, inst_tvar tlset, inst_ty tout)
-      | TTag tags ->
-          TTag
-            (List.map
-               (fun (tag, captures) -> (tag, List.map inst_ty captures))
-               tags)
-      | TPrim prim -> TPrim prim
     in
-    inst_ty gt
+    inst gt
 
-let occurs : variable -> ty -> bool =
+let occurs : variable -> tvar -> bool =
  fun v t ->
   let visited = ref [] in
-  let rec occurs_tvar t =
+  let rec occurs t =
     let var = tvar_v t in
     if List.mem var !visited then false
     else (
@@ -93,25 +92,23 @@ let occurs : variable -> ty -> bool =
           (* generalized variables should never occur in the same scope in another variable *)
           assert (var <> v);
           false
-      | Link t -> occurs_tvar t
+      | Link t -> occurs t
       | Content (LSet lset) ->
           SymbolMap.exists
-            (fun _ captures ->
-              SymbolMap.exists (fun _ t -> occurs_ty t) captures)
-            lset)
-  and occurs_ty = function
-    | TFn (tin, tlset, tout) ->
-        occurs_ty tin || occurs_tvar tlset || occurs_ty tout
-    | TTag tags ->
-        List.exists (fun (_, captures) -> List.exists occurs_ty captures) tags
-    | TPrim _ -> false
+            (fun _ captures -> SymbolMap.exists (fun _ t -> occurs t) captures)
+            lset
+      | Content (TFn (tin, tlset, tout)) ->
+          occurs tin || occurs tlset || occurs tout
+      | Content (TTag tags) ->
+          List.exists (fun (_, captures) -> List.exists occurs captures) tags
+      | Content (TPrim _) -> false)
   in
-  occurs_ty t
+  occurs t
 
-let gen : venv -> ty -> unit =
+let gen : venv -> tvar -> unit =
  fun venv t ->
   let visited = ref [] in
-  let rec gen_tvar t =
+  let rec gen t =
     let var = tvar_v t in
     if List.mem var !visited then ()
     else (
@@ -122,22 +119,21 @@ let gen : venv -> ty -> unit =
             (* variable occurs in the current env, don't generalize *)
             ()
           else tvar_set t ForA
-      | Link t -> gen_tvar t
+      | Link t -> gen t
       | ForA -> ()
       | Content (LSet lset) ->
           SymbolMap.iter
-            (fun _ captures -> SymbolMap.iter (fun _ t -> gen_ty t) captures)
-            lset)
-  and gen_ty = function
-    | TFn (tin, tlset, tout) ->
-        gen_ty tin;
-        gen_tvar tlset;
-        gen_ty tout
-    | TTag tags ->
-        List.iter (fun (_, captures) -> List.iter gen_ty captures) tags
-    | TPrim _ -> ()
+            (fun _ captures -> SymbolMap.iter (fun _ t -> gen t) captures)
+            lset
+      | Content (TFn (tin, tlset, tout)) ->
+          gen tin;
+          gen tlset;
+          gen tout
+      | Content (TTag tags) ->
+          List.iter (fun (_, captures) -> List.iter gen captures) tags
+      | Content (TPrim _) -> ())
   in
-  gen_ty t
+  gen t
 
 type separated_tags = {
   shared : (ty_tag * ty_tag) list;
@@ -164,9 +160,9 @@ let separate_tags tags1 tags2 =
   let result = walk [] [] [] (tags1, tags2) in
   result
 
-let unify : fresh_tvar -> ty -> ty -> unit =
+let unify : fresh_tvar -> tvar -> tvar -> unit =
  fun fresh_tvar t u ->
-  let rec unify_tvar visited t u =
+  let rec unify visited t u =
     let t, u = (unlink t, unlink u) in
     let vart, varu = (tvar_v t, tvar_v u) in
     let fail s =
@@ -194,7 +190,7 @@ let unify : fresh_tvar -> ty -> ty -> unit =
                   (fun cap new_caps ->
                     let t1 = SymbolMap.find cap caps1 in
                     let t2 = SymbolMap.find cap caps2 in
-                    unify_ty visited t1 t2;
+                    unify visited t1 t2;
                     SymbolMap.add cap t1 new_caps)
                   cap_symbols SymbolMap.empty
               in
@@ -214,50 +210,50 @@ let unify : fresh_tvar -> ty -> ty -> unit =
                 shared_lambdas diff_lsets
             in
             Content (LSet new_lset)
+        | Content (TFn (tin, tlset, tout)), Content (TFn (uin, ulset, uout)) ->
+            unify visited tin uin;
+            unify visited tlset ulset;
+            unify visited tout uout;
+            Content (TFn (tin, tlset, tout))
+        | Content (TTag tags1), Content (TTag tags2) ->
+            let ({ shared; only1; only2 } : separated_tags) =
+              separate_tags tags1 tags2
+            in
+            let shared : ty_tag list =
+              List.map
+                (fun ((t1, args1), (t2, args2)) ->
+                  assert (t1 = t2);
+                  if List.length args1 <> List.length args2 then
+                    fail ("arity mismatch for tag " ^ t1);
+                  List.iter2 (unify visited) args1 args2;
+                  (t1, args1))
+                shared
+            in
+            let all_tags = sort_tags @@ shared @ only1 @ only2 in
+            Content (TTag all_tags)
+        | Content (TPrim prim1), Content (TPrim prim2) ->
+            if prim1 <> prim2 then fail "incompatible primitives";
+            Content (TPrim prim1)
+        | _ -> fail "incompatible types"
       in
       let v = fresh_tvar @@ Unbd in
       tvar_set t (Link v);
       tvar_set u (Link v);
       tvar_set v t'
-  and unify_ty visited t u =
-    let fail s =
-      failwith (s ^ ": " ^ Type_print.show_ty t ^ " ~ " ^ Type_print.show_ty u)
-    in
-    match (t, u) with
-    | TFn (tin, tlset, tout), TFn (uin, ulset, uout) ->
-        unify_ty visited tin uin;
-        unify_tvar visited tlset ulset;
-        unify_ty visited tout uout
-    | TTag tags1, TTag tags2 ->
-        let ({ shared; only1; only2 } : separated_tags) =
-          separate_tags tags1 tags2
-        in
-        let shared : ty_tag list =
-          List.map
-            (fun ((t1, args1), (t2, args2)) ->
-              assert (t1 = t2);
-              if List.length args1 <> List.length args2 then
-                fail ("arity mismatch for tag " ^ t1);
-              List.iter2 (unify_ty visited) args1 args2;
-              (t1, args1))
-            shared
-        in
-        let _all_tags = sort_tags @@ shared @ only1 @ only2 in
-        ()
-    | TPrim prim1, TPrim prim2 ->
-        if prim1 <> prim2 then fail "incompatible primitives"
-    | _ -> fail "incompatible types"
   in
-  unify_ty [] t u
+  unify [] t u
 
-type kernel_sig = { args : [ `Variadic of ty | `List of ty list ]; ret : ty }
+type kernel_sig = {
+  args : [ `Variadic of tvar | `List of tvar list ];
+  ret : tvar;
+}
 
 let kernel_sig : kernelfn -> kernel_sig = function
-  | `StrConcat -> { args = `Variadic (TPrim `Str); ret = TPrim `Str }
-  | `Add -> { args = `Variadic (TPrim `Int); ret = TPrim `Int }
-  | `Itos -> { args = `List [ TPrim `Int ]; ret = TPrim `Str }
+  | `StrConcat -> { args = `Variadic (tvar_str ()); ret = tvar_str () }
+  | `Add -> { args = `Variadic (tvar_int ()); ret = tvar_int () }
+  | `Itos -> { args = `List [ tvar_int () ]; ret = tvar_str () }
 
-let infer_pat : Ctx.t -> venv -> e_pat -> venv * ty =
+let infer_pat : Ctx.t -> venv -> e_pat -> venv * tvar =
  fun ctx venv p ->
   let rec go venv (t, p) =
     let venv, t' =
@@ -267,7 +263,8 @@ let infer_pat : Ctx.t -> venv -> e_pat -> venv * ty =
           let args_venv = List.concat arg_venvs in
           let tag = (tag, arg_tys) in
           let tag_ty = TTag [ tag ] in
-          (args_venv, tag_ty)
+          let t = ctx.fresh_tvar @@ Content tag_ty in
+          (args_venv, t)
       | PVar x -> ([ (x, t) ], t)
     in
     unify ctx.fresh_tvar t t';
@@ -275,7 +272,7 @@ let infer_pat : Ctx.t -> venv -> e_pat -> venv * ty =
   in
   go venv p
 
-let infer_expr : Ctx.t -> venv -> e_expr -> ty =
+let infer_expr : Ctx.t -> venv -> e_expr -> tvar =
  fun ctx venv e ->
   let rec go venv (t, e) =
     let t' =
@@ -287,12 +284,13 @@ let infer_expr : Ctx.t -> venv -> e_expr -> ty =
               failwith
                 ("unbound variable " ^ Symbol.show_symbol_raw x ^ " in env "
                ^ show_venv venv))
-      | Int _ -> TPrim `Int
-      | Str _ -> TPrim `Str
-      | Unit -> TPrim `Unit
+      | Int _ -> ctx.fresh_tvar @@ Content (TPrim `Int)
+      | Str _ -> ctx.fresh_tvar @@ Content (TPrim `Str)
+      | Unit -> ctx.fresh_tvar @@ Content (TPrim `Unit)
       | Tag (tag, args) ->
           let arg_tys = List.map (go venv) args in
-          TTag [ (tag, arg_tys) ]
+          let tag = TTag [ (tag, arg_tys) ] in
+          ctx.fresh_tvar @@ Content tag
       | Let ((t_x, x), e, rest) ->
           let t_e = go venv e in
           unify ctx.fresh_tvar t_e t_x;
@@ -301,7 +299,7 @@ let infer_expr : Ctx.t -> venv -> e_expr -> ty =
           let t_f = go venv f in
           let t_a = go venv a in
           let t_f_lset = ctx.fresh_tvar @@ Unbd in
-          let t_f_wanted = TFn (t_a, t_f_lset, t) in
+          let t_f_wanted = ctx.fresh_tvar @@ Content (TFn (t_a, t_f_lset, t)) in
           unify ctx.fresh_tvar t_f t_f_wanted;
           t
       | KCall (kernelfn, args) ->
@@ -330,7 +328,7 @@ let infer_expr : Ctx.t -> venv -> e_expr -> ty =
   in
   go venv e
 
-let infer_fn : Ctx.t -> venv -> symbol -> fn -> ty =
+let infer_fn : Ctx.t -> venv -> symbol -> fn -> tvar =
  fun ctx venv lambda { arg = t_a, a; captures; body } ->
   let captures_list = SymbolMap.bindings captures in
   let venv' = ((a, t_a) :: captures_list) @ venv in
@@ -338,11 +336,11 @@ let infer_fn : Ctx.t -> venv -> symbol -> fn -> ty =
   let t_lset =
     ctx.fresh_tvar @@ Content (LSet (SymbolMap.singleton lambda captures))
   in
-  let t_fn = TFn (t_a, t_lset, t_ret) in
+  let t_fn = ctx.fresh_tvar @@ Content (TFn (t_a, t_lset, t_ret)) in
   gen venv t_fn;
   t_fn
 
-let infer_def_val : Ctx.t -> venv -> def -> ty =
+let infer_def_val : Ctx.t -> venv -> def -> tvar =
  fun ctx venv ((_, x), def) ->
   match def with
   | `Fn fn -> infer_fn ctx venv x fn

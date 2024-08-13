@@ -4,24 +4,39 @@ open Symbol
 module M = Monotype_lifted.Ast
 module T = Monotype_lifted.Type
 
-let inst_type ~fresh_tvar t =
-  let rec go t =
-    match t with
-    | T.TFn (t1, t2) -> TFn (go t1, fresh_tvar Unbd, go t2)
-    | T.TTag tags ->
-        let tags = List.map (fun (tag, ts) -> (tag, List.map go ts)) tags in
-        TTag tags
-    | T.TPrim x -> TPrim x
+type cache = (T.ty * tvar) list ref
+
+let unfilled_ty = Content (TTag [ ("__lambdasolved_unfilled", []) ])
+
+let inst_type ~(cache : cache) ~fresh_tvar t =
+  let rec go (t : T.ty) =
+    match List.assq_opt t !cache with
+    | Some t -> t
+    | None ->
+        let t' = fresh_tvar unfilled_ty in
+        cache := (t, t') :: !cache;
+        let content =
+          match !t with
+          | T.TFn (t1, t2) -> Content (TFn (go t1, fresh_tvar Unbd, go t2))
+          | T.TTag tags ->
+              let tags =
+                List.map (fun (tag, ts) -> (tag, List.map go ts)) tags
+              in
+              Content (TTag tags)
+          | T.TPrim x -> Content (TPrim x)
+        in
+        tvar_set t' content;
+        t'
   in
   go t
 
-let inst_typed_symbol ~fresh_tvar (t, x) =
-  let t = inst_type ~fresh_tvar t in
+let inst_typed_symbol ~cache ~fresh_tvar (t, x) =
+  let t = inst_type ~cache ~fresh_tvar t in
   (t, x)
 
-let inst_expr ~fresh_tvar (e : M.e_expr) =
+let inst_expr ~cache ~fresh_tvar (e : M.e_expr) =
   let rec go ((t, e) : M.e_expr) =
-    let t = inst_type ~fresh_tvar t in
+    let t = inst_type ~cache ~fresh_tvar t in
     let e =
       match e with
       | M.Var x -> Var x
@@ -30,7 +45,7 @@ let inst_expr ~fresh_tvar (e : M.e_expr) =
       | M.Unit -> Unit
       | M.Tag (tag, es) -> Tag (tag, List.map go es)
       | M.Let (x, e1, e2) ->
-          let x = inst_typed_symbol ~fresh_tvar x in
+          let x = inst_typed_symbol ~cache ~fresh_tvar x in
           Let (x, go e1, go e2)
       | M.Call (e1, e2) -> Call (go e1, go e2)
       | M.KCall (kfn, es) -> KCall (kfn, List.map go es)
@@ -45,7 +60,7 @@ let inst_expr ~fresh_tvar (e : M.e_expr) =
     let e = go e in
     (p, e)
   and go_pat ((t, p) : M.e_pat) =
-    let t = inst_type ~fresh_tvar t in
+    let t = inst_type ~cache ~fresh_tvar t in
     let p =
       match p with
       | M.PTag (t, ps) -> PTag (t, List.map go_pat ps)
@@ -55,25 +70,27 @@ let inst_expr ~fresh_tvar (e : M.e_expr) =
   in
   go e
 
-let inst_fn ~fresh_tvar ({ arg; captures; body } : M.fn) =
-  let arg = inst_typed_symbol ~fresh_tvar arg in
+let inst_fn ~cache ~fresh_tvar ({ arg; captures; body } : M.fn) =
+  let arg = inst_typed_symbol ~cache ~fresh_tvar arg in
   let captures =
-    List.map (inst_typed_symbol ~fresh_tvar) captures
+    List.map (inst_typed_symbol ~cache ~fresh_tvar) captures
     |> List.map (fun (t, x) -> (x, t))
     |> List.to_seq |> SymbolMap.of_seq
   in
-  let body = inst_expr ~fresh_tvar body in
+  let body = inst_expr ~cache ~fresh_tvar body in
   { arg; captures; body }
 
-let inst_def ~fresh_tvar ((x, d) : M.def) : def =
-  let x = inst_typed_symbol ~fresh_tvar x in
+let inst_def ~cache ~fresh_tvar ((x, d) : M.def) : def =
+  let x = inst_typed_symbol ~cache ~fresh_tvar x in
   let d =
     match d with
-    | `Run (e, t) -> `Run (inst_expr ~fresh_tvar e, t)
-    | `Fn fn -> `Fn (inst_fn ~fresh_tvar fn)
-    | `Val e -> `Val (inst_expr ~fresh_tvar e)
+    | `Run (e, t) -> `Run (inst_expr ~cache ~fresh_tvar e, t)
+    | `Fn fn -> `Fn (inst_fn ~cache ~fresh_tvar fn)
+    | `Val e -> `Val (inst_expr ~cache ~fresh_tvar e)
   in
   (x, d)
 
 let inst : fresh_tvar:fresh_tvar -> Monotype_lifted.Ast.program -> program =
- fun ~fresh_tvar p -> List.map (inst_def ~fresh_tvar) p
+ fun ~fresh_tvar p ->
+  let cache = ref [] in
+  List.map (inst_def ~cache ~fresh_tvar) p

@@ -45,17 +45,20 @@ module SymbolMap = struct
     let compare = compare
   end)
 
-  let union ?(checked = true) ?(pp = fun _ -> "") u v =
+  let union ?(checker = None) ?(pp = fun _ -> "") u v =
     let f k x y =
-      if x <> y && checked then
-        failwith
-          ("SymbolMap.union: conflicting bindings on " ^ show_symbol_raw k
-         ^ "\n" ^ pp x ^ " vs " ^ pp y);
+      (match checker with
+      | Some checker ->
+          if not (checker k x y) then
+            failwith
+              ("SymbolMap.union: conflicting bindings on " ^ show_symbol_raw k
+             ^ "\n" ^ pp x ^ " vs " ^ pp y)
+      | None -> ());
       Some x
     in
     union f u v
 
-  let union_uc ?(pp = fun _ -> "") u v = union ~checked:false ~pp u v
+  let union_uc ?(pp = fun _ -> "") u v = union ~checker:None ~pp u v
 
   let diff u v =
     let f _ x y = match (x, y) with Some x, None -> Some x | _ -> None in
@@ -65,10 +68,10 @@ module SymbolMap = struct
     let f k _ = not (List.mem k keys) in
     filter f m
 
-  let concat ?(checked = true) ?(pp = fun _ -> "") lst =
-    List.fold_left (union ~checked ~pp) empty lst
+  let concat ?(checker = None) ?(pp = fun _ -> "") lst =
+    List.fold_left (union ~checker ~pp) empty lst
 
-  let concat_uc ?(pp = fun _ -> "") lst = concat ~checked:false ~pp lst
+  let concat_uc ?(pp = fun _ -> "") lst = concat ~checker:None ~pp lst
   let symmetric_diff u v = union (diff u v) (diff v u)
 end
 
