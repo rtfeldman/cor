@@ -107,6 +107,17 @@ let lambdamono
   let lambdamono = Lambdamono.Lower.lower ctx lambdasolved in
   Ok { symbols; syntax; lambdamono }
 
+type ir_program = {
+  symbols : Symbol.t;
+  syntax : Syntax.Ast.program;
+  ir : Ir.Ast.program;
+}
+
+let ir ({ symbols; syntax; lambdamono } : lambdamono_program) =
+  let ctx = Ir.Ctx.make ~symbols in
+  let ir = Ir.Lower.lower ~ctx lambdamono in
+  Ok { symbols; syntax; ir }
+
 let ( let* ) = Result.bind
 
 module Lss : LANGUAGE = struct
@@ -156,6 +167,16 @@ module Lss : LANGUAGE = struct
         let* p = lambdasolved p in
         let* { lambdamono; _ } = lambdamono p in
         Ok (Lambdamono.Print.string_of_program lambdamono)
+    | "ir" ->
+        let* p = parse source in
+        let* p = canonicalize p in
+        let* p = solve p in
+        let* p = monotype p in
+        let* p = monotype_lifted p in
+        let* p = lambdasolved p in
+        let* p = lambdamono p in
+        let* { ir; _ } = ir p in
+        Ok (Ir.Print.string_of_program ir)
     | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
   let type_at loc s =

@@ -3,6 +3,7 @@
 # cor +monotype_lifted -print
 # cor +lambdasolved -print
 # cor +lambdamono -print
+# cor +ir -print
 
 let id = \x -> x;;
 #   ^^
@@ -66,3 +67,46 @@ run idstr = id "hello";;
 >   when Id2 is
 >     | Id2 -> id4("hello")
 >   end
+
+> cor-out +ir -print
+> fn id4(x: str): str
+> {
+>   return x;
+> }
+> 
+> fn id3(x: int): int
+> {
+>   return x;
+> }
+> 
+> fn idint_thunk(): int
+> {
+>   let struct: {} = @make_struct{};
+>   let var: [ `0 {} ] = @make_union<0, struct>;
+>   let discr: int = @get_union_id<var>;
+>   switch discr {
+>   0 -> {
+>     let var1: int = 1;
+>     @call_direct(id3, var1)
+>   }
+>   } in join join;
+>   return join;
+> }
+> 
+> entry idint: int = @call_direct(idint_thunk);
+> 
+> fn idstr_thunk(): str
+> {
+>   let struct1: {} = @make_struct{};
+>   let var2: [ `0 {} ] = @make_union<0, struct1>;
+>   let discr1: int = @get_union_id<var2>;
+>   switch discr1 {
+>   0 -> {
+>     let var3: str = "hello";
+>     @call_direct(id4, var3)
+>   }
+>   } in join join1;
+>   return join1;
+> }
+> 
+> entry idstr: str = @call_direct(idstr_thunk);
