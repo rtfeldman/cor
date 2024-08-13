@@ -4,10 +4,11 @@
 # cor +lambdasolved -print
 # cor +lambdamono -print
 # cor +ir -print
+# cor +eval -print
 
 let id = \x -> x;;
 run run1 =
-  let n = 1 in
+  let n = 2 in
   id (\x -> ~add x n) 1;;
 run run2 = id (\x -> x) 2;;
 
@@ -16,7 +17,7 @@ run run2 = id (\x -> x) 2;;
 >   x
 > let run1 =
 >   let n =
->     1 in
+>     2 in
 >   (id \x1 -> ~add x1 n) 1
 > let run2 =
 >   (id \x2 -> x2) 2
@@ -26,7 +27,7 @@ run run2 = id (\x -> x) 2;;
 >   x
 > run run1: Int =
 >   let n: Int =
->     1 in
+>     2 in
 >   (id1 \x1 -> ~add x1 n) 1
 > run run2: Int =
 >   (id1 \x2 -> x2) 2
@@ -38,7 +39,7 @@ run run2 = id (\x -> x) 2;;
 >   ~add x1 n
 > run run1: Int =
 >   let n: Int =
->     1 in
+>     2 in
 >   (id1 clos) 1
 > let clos1: Int -> Int = \x2 ->
 >   x2
@@ -52,7 +53,7 @@ run run2 = id (\x -> x) 2;;
 >   ~add x1 n
 > run run1: Int =
 >   let n: Int =
->     1 in
+>     2 in
 >   (id1 clos) 1
 > let clos1: Int -[clos1]-> Int = \x2 ->
 >   x2
@@ -70,7 +71,7 @@ run run2 = id (\x -> x) 2;;
 > fn id2(x: [Clos {n: Int}]): [Clos {n: Int}] =
 >   x
 > run run1: Int =
->   let n: Int = 1 in
+>   let n: Int = 2 in
 >   when when Id1 is
 >          | Id1 -> id2(Clos {n: n})
 >        end is
@@ -108,7 +109,7 @@ run run2 = id (\x -> x) 2;;
 > 
 > fn run1_thunk(): int
 > {
->   let n: int = 1;
+>   let n: int = 2;
 >   let struct: {} = @make_struct{};
 >   let var1: [ `0 {} ] = @make_union<0, struct>;
 >   let discr: int = @get_union_id<var1>;
@@ -157,3 +158,9 @@ run run2 = id (\x -> x) 2;;
 > }
 > 
 > entry run2: int = @call_direct(run2_thunk);
+
+> cor-out +eval -print
+> run1 = 3
+>      >
+> run2 = 2
+>      >

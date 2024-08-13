@@ -4,10 +4,11 @@
 # cor +lambdasolved -print
 # cor +lambdamono -print
 # cor +ir -print
+# cor +eval -print
 
 let map = \x ->
   let f = \y -> ~add y x in
-  f 1
+  f 2
 ;;
 
 run main = map 1;;
@@ -16,7 +17,7 @@ run main = map 1;;
 > let map = \x ->
 >   let f = \y ->
 >     ~add y x in
->   f 1
+>   f 2
 > let main =
 >   map 1
 
@@ -24,7 +25,7 @@ run main = map 1;;
 > let map1: Int -> Int = \x ->
 >   let f: Int -> Int = \y ->
 >     ~add y x in
->   f 1
+>   f 2
 > run main: Int =
 >   map1 1
 
@@ -32,7 +33,7 @@ run main = map 1;;
 > let f(x: Int): Int -> Int = \y ->
 >   ~add y x
 > let map1: Int -> Int = \x ->
->   f 1
+>   f 2
 > run main: Int =
 >   map1 1
 
@@ -40,7 +41,7 @@ run main = map 1;;
 > let f(x: Int): Int -[f (x: Int)]-> Int = \y ->
 >   ~add y x
 > let map1: Int -[map1]-> Int = \x ->
->   f 1
+>   f 2
 > run main: Int =
 >   map1 1
 
@@ -50,7 +51,7 @@ run main = map 1;;
 >   ~add y x
 > fn map2(x: Int): Int =
 >   when F {x: x} is
->     | F captures1 -> f1(1, captures1)
+>     | F captures1 -> f1(2, captures1)
 >   end
 > run main: Int =
 >   when Map1 is
@@ -75,7 +76,7 @@ run main = map 1;;
 >   0 -> {
 >     let payload: { { int } } = @get_union_struct<var2>;
 >     let captures1: { int } = @get_struct_field<payload, 0>;
->     let var3: int = 1;
+>     let var3: int = 2;
 >     @call_direct(f1, var3, captures1)
 >   }
 >   } in join join;
@@ -97,3 +98,7 @@ run main = map 1;;
 > }
 > 
 > entry main: int = @call_direct(main_thunk);
+
+> cor-out +eval -print
+> main = 3
+>      >

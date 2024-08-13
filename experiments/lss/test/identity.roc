@@ -4,6 +4,7 @@
 # cor +lambdasolved -print
 # cor +lambdamono -print
 # cor +ir -print
+# cor +eval -print
 
 let id = \x -> x;;
 #   ^^
@@ -110,3 +111,9 @@ run idstr = id "hello";;
 > }
 > 
 > entry idstr: str = @call_direct(idstr_thunk);
+
+> cor-out +eval -print
+> idint = 1
+>       >
+> idstr = [104 101 108 108 111]
+>       >

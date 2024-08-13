@@ -4,6 +4,7 @@
 # cor +lambdasolved -print
 # cor +lambdamono -print
 # cor +ir -print
+# cor +eval -print
 
 let f = \t ->
   when t is
@@ -200,3 +201,7 @@ run main =
 > }
 > 
 > entry main: int = @call_direct(main_thunk);
+
+> cor-out +eval -print
+> main = 22
+>      >

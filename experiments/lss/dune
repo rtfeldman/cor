@@ -4,4 +4,5 @@
              syntax canonical canonical_solved
              monotype monotype_lifted
              lambdasolved lambdamono
-             ir))
+             ir
+             eval))
