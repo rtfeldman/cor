@@ -101,8 +101,8 @@ let pp_fn : Format.formatter -> fn -> unit =
 
 let pp_global : Format.formatter -> global -> unit =
   let open Format in
-  fun f { name; layout; init; entry } ->
-    let entry = if entry then "entry" else "global" in
+  fun f { name; layout; init; entry_ty } ->
+    let entry = Option.fold ~none:"global" ~some:(fun _ -> "entry") entry_ty in
     fprintf f "@[<hv 2>%s %a:@ %a@ = %a;@]" entry pp_symbol name pp_layout
       layout pp_expr init
 

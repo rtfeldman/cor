@@ -347,7 +347,7 @@ let infer_def_val : Ctx.t -> venv -> def -> ty =
   match def with
   | `Fn fn -> infer_fn ctx venv x fn
   | `Val e -> infer_expr ctx venv e
-  | `Run e -> infer_expr ctx venv e
+  | `Run (e, _) -> infer_expr ctx venv e
 
 let infer : Ctx.t -> program -> unit =
  fun ctx program ->

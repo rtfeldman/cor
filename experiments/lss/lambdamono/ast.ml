@@ -29,6 +29,6 @@ and expr =
 and branch = e_pat * e_expr
 
 type fn = { args : typed_symbol list; body : e_expr }
-type def_val = [ `Fn of fn | `Val of e_expr | `Run of e_expr ]
+type def_val = [ `Fn of fn | `Val of e_expr | `Run of e_expr * Syntax.Type.tvar ]
 type def = symbol * def_val
 type program = def list

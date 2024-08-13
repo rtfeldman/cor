@@ -204,4 +204,4 @@ run main =
 
 > cor-out +eval -print
 > main = 22
->      >
+>      > 22

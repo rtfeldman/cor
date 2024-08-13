@@ -65,11 +65,11 @@ let inst_fn ~fresh_tvar ({ arg; captures; body } : M.fn) =
   let body = inst_expr ~fresh_tvar body in
   { arg; captures; body }
 
-let inst_def ~fresh_tvar ((x, d) : M.def) =
+let inst_def ~fresh_tvar ((x, d) : M.def) : def =
   let x = inst_typed_symbol ~fresh_tvar x in
   let d =
     match d with
-    | `Run e -> `Run (inst_expr ~fresh_tvar e)
+    | `Run (e, t) -> `Run (inst_expr ~fresh_tvar e, t)
     | `Fn fn -> `Fn (inst_fn ~fresh_tvar fn)
     | `Val e -> `Val (inst_expr ~fresh_tvar e)
   in

@@ -161,6 +161,6 @@ run run2 = id (\x -> x) 2;;
 
 > cor-out +eval -print
 > run1 = 3
->      >
+>      > 3
 > run2 = 2
->      >
+>      > 2

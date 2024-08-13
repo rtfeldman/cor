@@ -38,7 +38,9 @@ and expr =
 
 and branch = e_pat * e_expr
 
-type run_def = Run of { bind : typed_symbol; body : e_expr }
+type run_def =
+  | Run of { bind : typed_symbol; body : e_expr; ty : Syntax.Type.tvar }
+
 type def = [ `Def of let_def | `Run of run_def ]
 type program = def list
 

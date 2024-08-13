@@ -78,14 +78,14 @@ let eval_globals ~ctx definitions =
   in
   go [] definitions
 
-type evaled = { symbol : symbol; cell : memory_cell }
+type evaled = { symbol : symbol; cell : memory_cell; ty : Syntax.Type.tvar }
 
 let eval : ctx:Ctx.t -> program -> evaled list =
  fun ~ctx program ->
   let memory = eval_globals ~ctx program in
   List.filter_map
     (function
-      | Global { name; entry = true; _ } ->
-          Some { symbol = name; cell = List.assoc name memory }
+      | Global { name; entry_ty = Some ty; _ } ->
+          Some { symbol = name; cell = List.assoc name memory; ty }
       | _ -> None)
     program

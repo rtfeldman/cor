@@ -114,6 +114,6 @@ run idstr = id "hello";;
 
 > cor-out +eval -print
 > idint = 1
->       >
+>       > 1
 > idstr = [104 101 108 108 111]
->       >
+>       > "hello"

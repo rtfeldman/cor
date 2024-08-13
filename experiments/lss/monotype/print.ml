@@ -129,7 +129,7 @@ let pp_def : Format.formatter -> def -> unit =
   let open Format in
   match def with
   | `Def letdef -> pp_letdef f letdef
-  | `Run (Run { bind; body }) ->
+  | `Run (Run { bind; body; _ }) ->
       fprintf f "@[<v 0>@[<v 2>run %a: %a =@ %a@]@]" pp_symbol (snd bind)
         Type_print.pp_ty (fst bind) pp_expr body
 

@@ -125,14 +125,14 @@ let lower_fn ~ctx name ({ args; body } : M.fn) : def =
   let body, ret = lower_expr ~ctx body in
   Fn { name; args; body; ret }
 
-let lower_val ~ctx ~entry name e =
+let lower_val ~ctx ~entry_ty name e =
   let thunk_name =
     ctx.symbols.fresh_symbol_named (Symbol.show_symbol_raw name ^ "_thunk")
   in
   let fn = lower_fn ~ctx thunk_name { args = []; body = e } in
   let layout = lower_type (fst e) in
   let global =
-    Global { name; layout; init = CallDirect (thunk_name, []); entry }
+    Global { name; layout; init = CallDirect (thunk_name, []); entry_ty }
   in
   [ fn; global ]
 
@@ -141,8 +141,8 @@ let lower_def ~ctx (name, def) : def list =
   | `Fn ({ args; body } : M.fn) ->
       let fn = lower_fn ~ctx name { args; body } in
       [ fn ]
-  | `Val e -> lower_val ~ctx ~entry:false name e
-  | `Run e -> lower_val ~ctx ~entry:true name e
+  | `Val e -> lower_val ~ctx ~entry_ty:None name e
+  | `Run (e, ty) -> lower_val ~ctx ~entry_ty:(Some ty) name e
 
 let lower ~ctx (defs : M.program) : program =
   let defs = List.concat @@ List.map (lower_def ~ctx) defs in

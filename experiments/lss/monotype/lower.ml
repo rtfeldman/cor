@@ -104,10 +104,11 @@ let specialize_let_val ~ctx ~ty_cache (C.Letval { bind = t, name; body; _ }) =
 let fresh_ty_cache () = ref []
 
 let specialize_run_def ctx (C.Run { bind = t, name; body; _ }) =
+  let ty_original = t in
   let ty_cache = fresh_ty_cache () in
   let t = lower_type @@ clone_inst ctx.fresh_tvar ty_cache t in
   let body = specialize_expr ~ctx ~ty_cache:(fresh_ty_cache ()) body in
-  Run { bind = (t, name); body }
+  Run { bind = (t, name); body; ty = ty_original }
 
 let make_context ~symbols ~fresh_tvar program =
   {

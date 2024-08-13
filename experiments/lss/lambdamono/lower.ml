@@ -156,9 +156,9 @@ let init_specializations : Ctx.t -> M.program -> def list =
     | ((_, x), def) :: defs ->
         let acc =
           match def with
-          | `Run run ->
+          | `Run (run, t) ->
               let run = specialize_run ~ctx ~ty_cache:(fresh_ty_cache ()) run in
-              (x, `Run run) :: acc
+              (x, `Run (run, t)) :: acc
           | `Val val_ ->
               let val_ =
                 specialize_val ~ctx ~ty_cache:(fresh_ty_cache ()) val_

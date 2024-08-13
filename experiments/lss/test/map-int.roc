@@ -101,4 +101,4 @@ run main = map 1;;
 
 > cor-out +eval -print
 > main = 3
->      >
+>      > 3

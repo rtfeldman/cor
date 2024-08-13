@@ -128,7 +128,7 @@ let pp_def : Format.formatter -> def -> unit =
   | `Val body ->
       fprintf f "@[<v 0>@[<v 2>let %a: %a =@ %a@]@]" pp_symbol x
         Type_print.pp_ty t pp_expr body
-  | `Run body ->
+  | `Run (body, _) ->
       fprintf f "@[<v 0>@[<v 2>run %a: %a =@ %a@]@]" pp_symbol x
         Type_print.pp_ty t pp_expr body
 

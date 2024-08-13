@@ -118,9 +118,9 @@ let lambda_lift_letval ~ctx (Letval { bind; body } : M.letval) : def list =
   let def = (bind, `Val body) in
   lifted @ [ def ]
 
-let lambda_lift_run ~ctx (Run { bind; body } : M.run_def) : def list =
+let lambda_lift_run ~ctx (Run { bind; body; ty } : M.run_def) : def list =
   let lifted, body = lambda_lift_expr ~ctx body in
-  let def = (bind, `Run body) in
+  let def = (bind, `Run (body, ty)) in
   lifted @ [ def ]
 
 let lambda_lift_def ~ctx = function

@@ -25,7 +25,13 @@ type stmt =
       join : var;
     }
 
-type global = { name : symbol; layout : layout; init : expr; entry : bool }
+type global = {
+  name : symbol;
+  layout : layout;
+  init : expr;
+  entry_ty : Syntax.Type.tvar option;
+}
+
 type fn = { name : symbol; args : var list; body : stmt list; ret : var }
 type def = Global of global | Fn of fn
 type program = def list

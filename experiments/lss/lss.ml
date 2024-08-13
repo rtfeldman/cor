@@ -197,8 +197,8 @@ module Lss : LANGUAGE = struct
         let* p = lambdasolved p in
         let* p = lambdamono p in
         let* p = ir p in
-        let* { evaled; _ } = eval p in
-        Ok (Eval.Readback.string_of_evaled evaled)
+        let* { evaled; symbols; _ } = eval p in
+        Ok (Eval.Readback.string_of_evaled symbols evaled)
     | _ -> Error (Format.sprintf "Invalid stage: %s" stage)
 
   let type_at loc s =
