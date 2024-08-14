@@ -9,6 +9,9 @@ type cache = (T.ty * tvar) list ref
 let unfilled_ty = Content (TTag [ ("__lambdasolved_unfilled", []) ])
 
 let inst_type ~(cache : cache) ~fresh_tvar t =
+  (*FIXME*)
+  let _ = cache in
+  let cache = ref [] in
   let rec go (t : T.ty) =
     match List.assq_opt t !cache with
     | Some t -> t

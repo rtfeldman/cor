@@ -1,5 +1,6 @@
-type symbol = [ `Sym of string ] [@@deriving show]
+type symbol = [ `Sym of string ] [@@deriving show, eq]
 
+let unsafe_from_string s = `Sym s
 let show_symbol_raw (`Sym s) = s
 
 type t = {

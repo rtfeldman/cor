@@ -41,31 +41,41 @@ let free_vars e =
 let flip (x, y) = (y, x)
 
 let lambda_lift_expr ~(ctx : Ctx.t) expr : def list * e_expr =
-  let rec go (t, e) =
+  let rec go venv (t, e) =
     let lifted, e' =
       match e with
-      | M.Var x -> ([], Var x)
+      | M.Var x ->
+          let x = List.assoc_opt x venv |> Option.value ~default:x in
+          ([], Var x)
       | M.Int x -> ([], Int x)
       | M.Str x -> ([], Str x)
       | M.Unit -> ([], Unit)
       | M.Tag (x, es) ->
-          let lifted, es = List.split (List.map go es) in
+          let lifted, es = List.split (List.map (go venv) es) in
           (List.flatten lifted, Tag (x, es))
       | M.Let (`Letval (Letval { bind; body }), rest) ->
-          let lifted1, body = go body in
-          let lifted2, rest = go rest in
+          let lifted1, body = go venv body in
+          let lifted2, rest = go venv rest in
           let expr = Let (bind, body, rest) in
           (lifted1 @ lifted2, expr)
-      | M.Let (`Letfn (Letfn { bind; arg; body; recursive = _ }), rest) ->
+      | M.Let (`Letfn (Letfn { bind = t_x, x; arg; body; recursive = _ }), rest)
+        ->
           let captures =
             free_vars body
-            |> SymbolMap.remove_keys [ snd arg; snd bind ]
+            |> SymbolMap.remove_keys [ snd arg; x ]
             |> SymbolMap.remove_keys ctx.toplevels
             |> SymbolMap.bindings |> List.map flip
           in
-          let lifted1, body = go body in
+          (* A rename is needed to avoid conflicts with the same symbol in a
+             different letfn that needs to be lifted. *)
+          let x' =
+            ctx.symbols.fresh_symbol_named (Symbol.syn_of ctx.symbols x)
+          in
+          let bind = (t_x, x') in
+          let venv = (x, x') :: venv in
+          let lifted1, body = go venv body in
           let def = (bind, `Fn { arg; captures; body }) in
-          let lifted2, (_, rest) = go rest in
+          let lifted2, (_, rest) = go venv rest in
           (lifted1 @ lifted2 @ [ def ], rest)
       | M.Clos { arg; body } ->
           let captures =
@@ -74,38 +84,38 @@ let lambda_lift_expr ~(ctx : Ctx.t) expr : def list * e_expr =
             |> SymbolMap.remove_keys ctx.toplevels
             |> SymbolMap.bindings |> List.map flip
           in
-          let lifted, body = go body in
+          let lifted, body = go venv body in
           let clos_name = ctx.symbols.fresh_symbol_named "clos" in
           let def = ((t, clos_name), `Fn { arg; captures; body }) in
           (lifted @ [ def ], Var clos_name)
       | M.Call (e1, e2) ->
-          let lifted1, e1 = go e1 in
-          let lifted2, e2 = go e2 in
+          let lifted1, e1 = go venv e1 in
+          let lifted2, e2 = go venv e2 in
           (lifted1 @ lifted2, Call (e1, e2))
       | M.KCall (f, es) ->
-          let lifted, es = List.split (List.map go es) in
+          let lifted, es = List.split (List.map (go venv) es) in
           (List.flatten lifted, KCall (f, es))
       | M.When (e, bs) ->
-          let lifted1, e = go e in
-          let lifted2, bs = List.split (List.map go_branch bs) in
+          let lifted1, e = go venv e in
+          let lifted2, bs = List.split (List.map (go_branch venv) bs) in
           (lifted1 @ List.flatten lifted2, When (e, bs))
     in
     (lifted, (t, e'))
-  and go_branch (p, e) =
-    let lifted, e = go e in
-    let p = go_pat p in
+  and go_branch venv (p, e) =
+    let lifted, e = go venv e in
+    let p = go_pat venv p in
     (lifted, (p, e))
-  and go_pat (t, p) =
+  and go_pat venv (t, p) =
     let p' =
       match p with
       | M.PTag (x, ps) ->
-          let ps = List.map go_pat ps in
+          let ps = List.map (go_pat venv) ps in
           PTag (x, ps)
       | M.PVar x -> PVar x
     in
     (t, p')
   in
-  go expr
+  go [] expr
 
 let lambda_lift_letfn ~ctx (Letfn { bind; arg; body; recursive = _ } : M.letfn)
     : def list =

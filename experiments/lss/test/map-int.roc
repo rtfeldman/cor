@@ -30,28 +30,28 @@ run main = map 1;;
 >   map1 1
 
 > cor-out +monotype_lifted -print
-> let f(x: Int): Int -> Int = \y ->
+> let f1(x: Int): Int -> Int = \y ->
 >   ~add y x
 > let map1: Int -> Int = \x ->
->   f 2
+>   f1 2
 > run main: Int =
 >   map1 1
 
 > cor-out +lambdasolved -print
-> let f(x: Int): Int -[f (x: Int)]-> Int = \y ->
+> let f1(x: Int): Int -[f1 (x: Int)]-> Int = \y ->
 >   ~add y x
 > let map1: Int -[map1]-> Int = \x ->
->   f 2
+>   f1 2
 > run main: Int =
 >   map1 1
 
 > cor-out +lambdamono -print
-> fn f1(y: Int, captures2: {x: Int}): Int =
+> fn f2(y: Int, captures2: {x: Int}): Int =
 >   let x: Int = captures2.x in
 >   ~add y x
 > fn map2(x: Int): Int =
->   when F {x: x} is
->     | F captures1 -> f1(2, captures1)
+>   when F1 {x: x} is
+>     | F1 captures1 -> f2(2, captures1)
 >   end
 > run main: Int =
 >   when Map1 is
@@ -59,7 +59,7 @@ run main = map 1;;
 >   end
 
 > cor-out +ir -print
-> fn f1(y: int, captures2: { int }): int
+> fn f2(y: int, captures2: { int }): int
 > {
 >   let x: int = @get_struct_field<captures2, 0>;
 >   let var: int = @call_kfn(add, y, x);
@@ -77,7 +77,7 @@ run main = map 1;;
 >     let payload: { { int } } = @get_union_struct<var2>;
 >     let captures1: { int } = @get_struct_field<payload, 0>;
 >     let var3: int = 2;
->     @call_direct(f1, var3, captures1)
+>     @call_direct(f2, var3, captures1)
 >   }
 >   } in join join;
 >   return join;

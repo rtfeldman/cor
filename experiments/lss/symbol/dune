@@ -2,4 +2,4 @@
  (name symbol)
  (libraries util)
  (preprocess
-  (pps ppx_deriving.show)))
+  (pps ppx_deriving.show ppx_deriving.eq)))

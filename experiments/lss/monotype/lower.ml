@@ -3,6 +3,7 @@ open Type_clone_inst
 open Lower_type
 module C = Canonical_solved.Ast
 module T = Canonical_solved.Type
+module P = Syntax.Type_print
 
 type ctx = {
   symbols : Symbol.t;
@@ -11,7 +12,9 @@ type ctx = {
 }
 
 let specialize_expr ~ctx ~ty_cache ~mono_cache expr =
-  let lower_type = lower_type mono_cache in
+  let lower_type t =
+    lower_type mono_cache @@ clone_inst ctx.fresh_tvar ty_cache t
+  in
   let rec go (t, e) =
     let t = clone_inst ctx.fresh_tvar ty_cache t in
     let e =
@@ -100,14 +103,15 @@ let specialize_let_fn ~ctx ~ty_cache ~mono_cache ~t_new ~name_new
   in
   `Letfn letfn
 
-let specialize_let_val ~ctx ~ty_cache ~mono_cache
-    (C.Letval { bind = t, name; body; _ }) =
+let fresh_ty_cache () : ty_cache = ref []
+
+let specialize_let_val ctx (C.Letval { bind = t, name; body; _ }) =
+  let ty_cache = fresh_ty_cache () in
+  let mono_cache = fresh_mono_cache () in
   let t = lower_type mono_cache @@ clone_inst ctx.fresh_tvar ty_cache t in
   let body = specialize_expr ~ctx ~ty_cache ~mono_cache body in
   let letval = Letval { bind = (t, name); body } in
-  `Letval letval
-
-let fresh_ty_cache () : ty_cache = ref []
+  `Def (`Letval letval)
 
 let specialize_run_def ctx (C.Run { bind = t, name; body; _ }) =
   let ty_original = t in
@@ -142,10 +146,16 @@ let loop_specializations : ctx -> unit =
 
 let lower : ctx -> C.program -> program =
  fun ctx program ->
+  let let_defs =
+    List.filter_map
+      (function `Def (`Letval def) -> Some def | _ -> None)
+      program
+  in
   let run_defs =
     List.filter_map (function `Run run -> Some run | _ -> None) program
   in
+  let let_defs = List.map (specialize_let_val ctx) let_defs in
   let run_defs = List.map (specialize_run_def ctx) run_defs in
   loop_specializations ctx;
   let other_defs = Specializations.solved_specializations ctx.specializations in
-  other_defs @ List.map (fun d -> `Run d) run_defs
+  other_defs @ let_defs @ List.map (fun d -> `Run d) run_defs

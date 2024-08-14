@@ -12,13 +12,13 @@ let get_keys lset = SymbolMap.bindings lset |> List.map fst |> SymbolSet.of_list
 
 let is_generalized : tvar -> bool =
  fun t ->
-  let visited = ref [] in
-  let rec is_generalized t =
+  let rec is_generalized visited t =
     let t = unlink t in
     let var = tvar_v t in
-    if List.mem var !visited then false
-    else (
-      visited := var :: !visited;
+    if List.mem var visited then false
+    else
+      let visited = var :: visited in
+      let is_generalized = is_generalized visited in
       match tvar_deref t with
       | Unbd -> false
       | Link _ -> failwith "found a link after unlinking"
@@ -34,9 +34,9 @@ let is_generalized : tvar -> bool =
           List.exists
             (fun (_, captures) -> List.exists is_generalized captures)
             tags
-      | Content (TPrim _) -> false)
+      | Content (TPrim _) -> false
   in
-  is_generalized t
+  is_generalized [] t
 
 let inst : fresh_tvar -> tvar -> tvar =
  fun fresh_tvar gt ->
@@ -76,7 +76,8 @@ let inst : fresh_tvar -> tvar -> tvar =
           tvar_set t (Link t');
           t
     in
-    inst gt
+    let t' = inst gt in
+    t'
 
 let occurs : variable -> tvar -> bool =
  fun v t ->
@@ -170,7 +171,10 @@ let unify : fresh_tvar -> tvar -> tvar -> unit =
         (s ^ ": " ^ Type_print.show_tvar t ^ " ~ " ^ Type_print.show_tvar u)
     in
     if vart = varu then ()
-    else if List.mem (vart, varu) visited then fail "cyclic type"
+    else if List.mem (vart, varu) visited then (*
+      cyclic type
+      *)
+      ()
     else
       let visited = (vart, varu) :: visited in
       let t' =
@@ -236,10 +240,9 @@ let unify : fresh_tvar -> tvar -> tvar -> unit =
             Content (TPrim prim1)
         | _ -> fail "incompatible types"
       in
-      let v = fresh_tvar @@ Unbd in
+      let v = fresh_tvar @@ t' in
       tvar_set t (Link v);
-      tvar_set u (Link v);
-      tvar_set v t'
+      tvar_set u (Link v)
   in
   unify [] t u
 
@@ -272,6 +275,24 @@ let infer_pat : Ctx.t -> venv -> e_pat -> venv * tvar =
   in
   go venv p
 
+let rec unlink_to_lset : tvar -> lambda_set option =
+ fun t ->
+  match tvar_deref @@ unlink t with
+  | Content (TFn (_, lset, _)) -> unlink_to_lset lset
+  | Content (LSet lset) -> Some lset
+  | _ -> None
+
+let fix_captures : fresh_tvar -> venv -> tvar -> symbol -> unit =
+ fun fresh_tvar venv t x ->
+  let _ =
+    let ( let* ) = Option.bind in
+    let* lset = unlink_to_lset t in
+    let* captures = SymbolMap.find_opt x lset in
+    SymbolMap.iter (fun x t -> unify fresh_tvar t (List.assoc x venv)) captures;
+    None
+  in
+  ()
+
 let infer_expr : Ctx.t -> venv -> e_expr -> tvar =
  fun ctx venv e ->
   let rec go venv (t, e) =
@@ -279,7 +300,10 @@ let infer_expr : Ctx.t -> venv -> e_expr -> tvar =
       match e with
       | Var x -> (
           match List.assoc_opt x venv with
-          | Some t -> inst ctx.fresh_tvar t
+          | Some t ->
+              let t = inst ctx.fresh_tvar t in
+              fix_captures ctx.fresh_tvar venv t x;
+              t
           | None ->
               failwith
                 ("unbound variable " ^ Symbol.show_symbol_raw x ^ " in env "
@@ -331,13 +355,14 @@ let infer_expr : Ctx.t -> venv -> e_expr -> tvar =
 let infer_fn : Ctx.t -> venv -> symbol -> fn -> tvar =
  fun ctx venv lambda { arg = t_a, a; captures; body } ->
   let captures_list = SymbolMap.bindings captures in
-  let venv' = ((a, t_a) :: captures_list) @ venv in
+  let t_fn = ctx.fresh_tvar @@ Unbd in
+  let venv' = ((lambda, t_fn) :: (a, t_a) :: captures_list) @ venv in
   let t_ret = infer_expr ctx venv' body in
   let t_lset =
     ctx.fresh_tvar @@ Content (LSet (SymbolMap.singleton lambda captures))
   in
-  let t_fn = ctx.fresh_tvar @@ Content (TFn (t_a, t_lset, t_ret)) in
-  gen venv t_fn;
+  let t_fn' = ctx.fresh_tvar @@ Content (TFn (t_a, t_lset, t_ret)) in
+  unify ctx.fresh_tvar t_fn t_fn';
   t_fn
 
 let infer_def_val : Ctx.t -> venv -> def -> tvar =
@@ -351,9 +376,10 @@ let infer : Ctx.t -> program -> unit =
  fun ctx program ->
   let rec walk venv = function
     | [] -> ()
-    | (((t, x), _) as def) :: defs ->
+    | (((t, x), v) as def) :: defs ->
         let t' = infer_def_val ctx venv def in
         unify ctx.fresh_tvar t t';
+        (match v with `Fn _ -> gen venv t' | `Val _ | `Run _ -> ());
         walk ((x, t') :: venv) defs
   in
   walk [] program

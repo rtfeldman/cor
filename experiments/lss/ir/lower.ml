@@ -4,6 +4,7 @@ open Lower_type
 open Layout
 module M = Lambdamono.Ast
 module T = Lambdamono.Type
+module P = Lambdamono.Type_print
 
 let index_of f =
   let rec go i = function
@@ -12,25 +13,26 @@ let index_of f =
   in
   go 0
 
-let tag_id : T.ty -> string -> int =
+let tag_id : T.tvar -> string -> int =
  fun ty ctor ->
-  match ty with
+  match T.tvar_deref ty with
   | T.TTag tags -> index_of (fun (name, _) -> name = ctor) tags
   | _ -> failwith "not a tag"
 
-let field_id : T.ty -> string -> int =
+let field_id : T.tvar -> string -> int =
  fun ty field ->
-  match ty with
+  match T.tvar_deref ty with
   | T.TRecord fields -> index_of (fun (name, _) -> name = field) fields
-  | _ -> failwith "not a record"
+  | _ -> failwith ("not a record: " ^ P.show_ty ty)
 
-let get_pat_var : M.e_pat -> var =
- fun pat ->
+let get_pat_var : ctx:Ctx.t -> M.e_pat -> var =
+ fun ~ctx pat ->
   match pat with
-  | t, PVar v -> (lower_type t, v)
+  | t, PVar v -> (lower_type ctx.type_cache t, v)
   | _ -> failwith "non-var pattern not yet supported"
 
 let lower_expr ~ctx e : stmt list * var =
+  let lower_type = lower_type ctx.type_cache in
   let rec go_var (t, e) : stmt list * var =
     let asgns, expr = go_expr (t, e) in
     let l = lower_type t in
@@ -48,7 +50,9 @@ let lower_expr ~ctx e : stmt list * var =
     | M.Str s -> ([], Lit (`String s))
     | M.Unit -> ([], MakeStruct [])
     | M.Tag (ctor, args) ->
-        let struct_layout = Struct (List.map fst args |> List.map lower_type) in
+        let struct_layout =
+          ref @@ Struct (List.map fst args |> List.map lower_type)
+        in
         let struct_var = (struct_layout, ctx.symbols.fresh_symbol "struct") in
         let stmts, args = List.split @@ List.map go_var args in
         let let_struct = Let (struct_var, MakeStruct args) in
@@ -80,7 +84,7 @@ let lower_expr ~ctx e : stmt list * var =
         (List.concat stmts, call)
     | M.When (tag, branches) ->
         let tag_stmts, tag_var = go_var tag in
-        let discr_var = (Int, ctx.symbols.fresh_symbol "discr") in
+        let discr_var = (ref Int, ctx.symbols.fresh_symbol "discr") in
         let discr_asgn = Let (discr_var, GetUnionId tag_var) in
         let branches =
           List.sort (fun (tag_id1, _) (tag_id2, _) -> tag_id1 - tag_id2)
@@ -98,8 +102,8 @@ let lower_expr ~ctx e : stmt list * var =
         let stmts =
           if args = [] then []
           else
-            let arg_vars = List.map get_pat_var args in
-            let struct_layout = Struct (List.map fst arg_vars) in
+            let arg_vars = List.map (get_pat_var ~ctx) args in
+            let struct_layout = ref @@ Struct (List.map fst arg_vars) in
             let tag_payload_var =
               (struct_layout, ctx.symbols.fresh_symbol "payload")
             in
@@ -121,7 +125,9 @@ let lower_expr ~ctx e : stmt list * var =
   go_var e
 
 let lower_fn ~ctx name ({ args; body } : M.fn) : def =
-  let args : var list = List.map (fun (t, x) -> (lower_type t, x)) args in
+  let args : var list =
+    List.map (fun (t, x) -> (lower_type ctx.type_cache t, x)) args
+  in
   let body, ret = lower_expr ~ctx body in
   Fn { name; args; body; ret }
 
@@ -130,7 +136,7 @@ let lower_val ~ctx ~entry_ty name e =
     ctx.symbols.fresh_symbol_named (Symbol.show_symbol_raw name ^ "_thunk")
   in
   let fn = lower_fn ~ctx thunk_name { args = []; body = e } in
-  let layout = lower_type (fst e) in
+  let layout = lower_type ctx.type_cache (fst e) in
   let global =
     Global { name; layout; init = CallDirect (thunk_name, []); entry_ty }
   in

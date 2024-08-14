@@ -105,9 +105,9 @@ def:
   }
   | lr=let_or_run { fun ctx ->
       let (kind, l, x, e, loc_semi) = lr in
-      let e = e ctx in
       let loc = range l loc_semi in
       let loc_sym_x = add_scoped_def_sym ctx x in
+      let e = e ctx in
       let def = match kind with
         | `Let -> Def(loc_sym_x, e)
         | `Run -> Run(loc_sym_x, e)

@@ -1,3 +1,4 @@
 (library
   (name monotype)
-  (libraries canonical_solved))
+  (libraries canonical_solved)
+  (preprocess (pps ppx_deriving.eq ppx_deriving.show)))

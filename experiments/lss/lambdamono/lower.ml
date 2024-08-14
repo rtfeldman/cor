@@ -5,29 +5,35 @@ open Ctx
 open Symbol
 module M = Lambdasolved.Ast
 module T = Lambdasolved.Type
+module P = Lambdasolved.Type_print
 
-let specialize_expr ~ctx ~ty_cache expr =
+let specialize_expr ~(ctx : Ctx.t) ~ty_cache ~mono_cache expr =
+  let lower_type = lower_type mono_cache ctx.fresh_tvar in
   let rec go (t, e) =
-    let t = clone_inst ctx.fresh_tvar ty_cache t in
+    let t = clone_inst ctx.s_fresh_tvar ty_cache t in
     let e =
       match e with
       | M.Var x -> (
-          match Specializations.specialize_fn ctx.specializations x t with
+          match
+            Specializations.specialize_fn ctx.specializations mono_cache
+              ctx.fresh_tvar x t
+          with
           | None -> Var x (* No specialization needed *)
           | Some _fn_sym ->
               (* construct the lambda set tag *)
-              let { captures; ty = t_captures } =
-                extract_closure_captures t x
+              let captures =
+                extract_closure_captures mono_cache ctx.fresh_tvar t x
               in
               let tag_name = lambda_tag_name x in
               let captures_expr =
-                if List.length captures = 0 then None
-                else
-                  let build_field (x, t) =
-                    (Symbol.show_symbol_raw x, (t, Var x))
-                  in
-                  let captures_rcd = Record (List.map build_field captures) in
-                  Some (t_captures, captures_rcd)
+                match captures with
+                | None -> None
+                | Some { captures; ty = t_captures } ->
+                    let build_field (x, t) =
+                      (Symbol.show_symbol_raw x, (t, Var x))
+                    in
+                    let captures_rcd = Record (List.map build_field captures) in
+                    Some (t_captures, captures_rcd)
               in
               let tag = Tag (tag_name, Option.to_list captures_expr) in
               tag)
@@ -38,36 +44,41 @@ let specialize_expr ~ctx ~ty_cache expr =
           let args = List.map go args in
           Tag (t, args)
       | M.Let ((t_x, x), body, rest) ->
-          let bind = (lower_tvar t_x, x) in
+          let t_x = clone_inst ctx.s_fresh_tvar ty_cache t_x in
           let body = go body in
           let rest = go rest in
-          Let (bind, body, rest)
+          Let ((lower_type t_x, x), body, rest)
       | M.Call (((t_f, _) as f), a) ->
+          let t_f = clone_inst ctx.s_fresh_tvar ty_cache t_f in
           let f = go f in
           let a = go a in
-          let compile_branch (lambda, captures) : branch =
+          let compile_branch ((lambda, _) : symbol * T.captures) : branch =
             let captures_sym = ctx.symbols.fresh_symbol_named "captures" in
-            let t_captures = lower_captures captures in
+            let t_captures =
+              extract_closure_captures mono_cache ctx.fresh_tvar t_f lambda
+            in
             let lambda_real =
-              Specializations.specialize_fn ctx.specializations lambda t_f
+              Specializations.specialize_fn ctx.specializations mono_cache
+                ctx.fresh_tvar lambda t_f
               |> Option.get
             in
-            if SymbolMap.cardinal captures = 0 then
-              let pat = (fst f, PTag (lambda_tag_name lambda, [])) in
-              let body = (fst a, Call (lambda_real, [ a ])) in
-              (pat, body)
-            else
-              let pat =
-                ( fst f,
-                  PTag
-                    (lambda_tag_name lambda, [ (t_captures, PVar captures_sym) ])
-                )
-              in
-              let body =
-                ( fst a,
-                  Call (lambda_real, [ a; (t_captures, Var captures_sym) ]) )
-              in
-              (pat, body)
+            match t_captures with
+            | None ->
+                let pat = (fst f, PTag (lambda_tag_name lambda, [])) in
+                let body = (fst a, Call (lambda_real, [ a ])) in
+                (pat, body)
+            | Some { ty = t_captures; _ } ->
+                let pat =
+                  ( fst f,
+                    PTag
+                      ( lambda_tag_name lambda,
+                        [ (t_captures, PVar captures_sym) ] ) )
+                in
+                let body =
+                  ( fst a,
+                    Call (lambda_real, [ a; (t_captures, Var captures_sym) ]) )
+                in
+                (pat, body)
           in
           let lambda_set = extract_lambda_set t_f in
           let branches =
@@ -82,13 +93,13 @@ let specialize_expr ~ctx ~ty_cache expr =
           let branches = List.map go_branch branches in
           When (e, branches)
     in
-    (lower_tvar t, e)
+    (lower_type t, e)
   and go_branch (p, e) =
     let p = go_pat p in
     let e = go e in
     (p, e)
   and go_pat (t, p) =
-    let t = lower_tvar @@ clone_inst ctx.fresh_tvar ty_cache t in
+    let t = lower_type @@ clone_inst ctx.s_fresh_tvar ty_cache t in
     let p =
       match p with
       | M.PVar x -> PVar x
@@ -102,37 +113,39 @@ let specialize_expr ~ctx ~ty_cache expr =
 
 let fresh_ty_cache () = ref []
 
-let specialize_fn ~ctx ~ty_cache ~t_new ~t
-    ({ arg = t_arg, arg; captures; body } : M.fn) =
-  let t = clone_inst ctx.fresh_tvar ty_cache t in
-  Lambdasolved.Solve.unify ctx.fresh_tvar t t_new;
+let specialize_fn ~ctx ~ty_cache ~mono_cache ~t_new ~lambda ~t
+    ({ arg = t_arg, arg; captures = _; body } : M.fn) =
+  let t = clone_inst ctx.s_fresh_tvar ty_cache t in
+  Lambdasolved.Solve.unify ctx.s_fresh_tvar t t_new;
 
-  let t_arg = lower_tvar @@ clone_inst ctx.fresh_tvar ty_cache t_arg in
-  let body = specialize_expr ~ctx ~ty_cache body in
+  let t_arg = clone_inst ctx.s_fresh_tvar ty_cache t_arg in
+  let body = specialize_expr ~ctx ~ty_cache ~mono_cache body in
 
-  if SymbolMap.is_empty captures then { args = [ (t_arg, arg) ]; body }
-  else
-    let captures_sym = ctx.symbols.fresh_symbol_named "captures" in
-    let t_captures = lower_captures captures in
-    let args = [ (t_arg, arg); (t_captures, captures_sym) ] in
-    let body =
-      SymbolMap.fold
-        (fun x t body ->
-          let t = lower_tvar t in
-          let captures_arg = (t_captures, Var captures_sym) in
-          let access = (t, Access (captures_arg, Symbol.show_symbol_raw x)) in
-          let bind = (t, x) in
-          (fst body, Let (bind, access, body)))
-        captures body
-    in
-    { args; body }
+  let t_arg = lower_type mono_cache ctx.fresh_tvar t_arg in
 
-let specialize_val ~ctx ~ty_cache body =
-  let body = specialize_expr ~ctx ~ty_cache body in
+  let captures = extract_closure_captures mono_cache ctx.fresh_tvar t lambda in
+  match captures with
+  | None -> { args = [ (t_arg, arg) ]; body }
+  | Some { captures; ty = t_captures } ->
+      let captures_sym = ctx.symbols.fresh_symbol_named "captures" in
+      let args = [ (t_arg, arg); (t_captures, captures_sym) ] in
+      let body =
+        List.fold_left
+          (fun body (x, t) ->
+            let captures_arg = (t_captures, Var captures_sym) in
+            let access = (t, Access (captures_arg, Symbol.show_symbol_raw x)) in
+            let bind = (t, x) in
+            (fst body, Let (bind, access, body)))
+          body captures
+      in
+      { args; body }
+
+let specialize_val ~ctx ~ty_cache ~mono_cache body =
+  let body = specialize_expr ~ctx ~ty_cache ~mono_cache body in
   body
 
-let specialize_run ~ctx ~ty_cache body =
-  let body = specialize_val ~ctx ~ty_cache body in
+let specialize_run ~ctx ~ty_cache ~mono_cache body =
+  let body = specialize_val ~ctx ~ty_cache ~mono_cache body in
   body
 
 let loop_specializations : Ctx.t -> unit =
@@ -140,9 +153,10 @@ let loop_specializations : Ctx.t -> unit =
   let rec go () =
     match Specializations.next_specialization ctx.specializations with
     | None -> ()
-    | Some { t_fn; fn; t_new; specialized; name_new = _ } ->
+    | Some { name; t_fn; fn; t_new; specialized; name_new = _ } ->
         let fn =
-          specialize_fn ~ctx ~ty_cache:(fresh_ty_cache ()) ~t_new ~t:t_fn fn
+          specialize_fn ~ctx ~ty_cache:(fresh_ty_cache ())
+            ~mono_cache:(fresh_mono_cache ()) ~t_new ~lambda:name ~t:t_fn fn
         in
         specialized := Some fn;
         go ()
@@ -157,13 +171,17 @@ let init_specializations : Ctx.t -> M.program -> def list =
         let acc =
           match def with
           | `Run (run, t) ->
-              let run = specialize_run ~ctx ~ty_cache:(fresh_ty_cache ()) run in
-              (x, `Run (run, t)) :: acc
+              let ty_cache = fresh_ty_cache () in
+              let mono_cache = fresh_mono_cache () in
+              let run = specialize_run ~ctx ~ty_cache ~mono_cache run in
+              let acc = (x, `Run (run, t)) :: acc in
+              acc
           | `Val val_ ->
-              let val_ =
-                specialize_val ~ctx ~ty_cache:(fresh_ty_cache ()) val_
-              in
-              (x, `Val val_) :: acc
+              let ty_cache = fresh_ty_cache () in
+              let mono_cache = fresh_mono_cache () in
+              let val_ = specialize_val ~ctx ~ty_cache ~mono_cache val_ in
+              let acc = (x, `Val val_) :: acc in
+              acc
           | `Fn _ ->
               (* these will get specialized when called *)
               acc

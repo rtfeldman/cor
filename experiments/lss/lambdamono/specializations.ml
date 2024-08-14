@@ -5,9 +5,16 @@ open Lower_type
 module M = Lambdasolved.Ast
 module T = Lambdasolved.Type
 
-type specialization_key = { name : symbol; arg : ty; captures : ty; ret : ty }
+type specialization_key = {
+  name : symbol;
+  arg : tvar;
+  captures : tvar option;
+  ret : tvar;
+}
+[@@deriving eq]
 
 type specialization = {
+  name : symbol;
   t_fn : T.tvar;
   fn : M.fn;
   t_new : T.tvar;
@@ -30,23 +37,38 @@ let make : Symbol.t -> M.program -> t =
   in
   { symbols; fenv; specializations = ref [] }
 
-let specialize_fn : t -> symbol -> T.tvar -> symbol option =
- fun t name t_new ->
+let specialize_fn :
+    t -> mono_cache -> fresh_tvar -> symbol -> T.tvar -> symbol option =
+ fun t mono_cache fresh_tvar name t_new ->
   let ( let* ) = Option.bind in
   let* t_fn, fn = List.assoc_opt name t.fenv in
-  let { ty = captures; _ } = extract_closure_captures t_new name in
+  let captures =
+    extract_closure_captures mono_cache fresh_tvar t_new name
+    |> Option.map (fun { ty; _ } -> ty)
+  in
   let in', _lset, out' = extract_fn t_new in
   let specialization_key =
-    { name; captures; arg = lower_tvar in'; ret = lower_tvar out' }
+    {
+      name;
+      captures;
+      arg = lower_type mono_cache fresh_tvar in';
+      ret = lower_type mono_cache fresh_tvar out';
+    }
   in
-  match List.assoc_opt specialization_key !(t.specializations) with
-  | Some { name_new; _ } -> Some name_new
+  let matched =
+    List.find_opt (fun (key, _) ->
+        equal_specialization_key key specialization_key)
+    @@ !(t.specializations)
+  in
+
+  match matched with
+  | Some (_, { name_new; _ }) -> Some name_new
   | None ->
       let name_new =
         t.symbols.fresh_symbol_named @@ Symbol.syn_of t.symbols name
       in
       let specialization =
-        { t_fn; fn; name_new; t_new; specialized = ref None }
+        { name; t_fn; fn; name_new; t_new; specialized = ref None }
       in
       t.specializations :=
         (specialization_key, specialization) :: !(t.specializations);

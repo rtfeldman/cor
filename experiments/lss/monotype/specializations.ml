@@ -12,7 +12,7 @@ type needed_specialization = {
   specialized : def option ref;
 }
 
-type specialization_key = symbol * ty
+type specialization_key = symbol * ty [@@deriving eq]
 
 type t = {
   symbols : Symbol.t;
@@ -36,8 +36,12 @@ let specialize_fn : t -> mono_cache -> symbol -> T.tvar -> symbol option =
  fun t mono_cache name t_new ->
   let specialization = (name, lower_type mono_cache t_new) in
 
-  match List.assoc_opt specialization !(t.specializations) with
-  | Some { name_new; _ } -> Some name_new
+  match
+    List.find_opt
+      (fun (key, _) -> equal_specialization_key key specialization)
+      !(t.specializations)
+  with
+  | Some (_, { name_new; _ }) -> Some name_new
   | None ->
       let ( let* ) = Option.bind in
       let* def = List.assoc_opt name t.fenv in
