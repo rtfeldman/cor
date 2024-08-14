@@ -282,13 +282,20 @@ let rec unlink_to_lset : tvar -> lambda_set option =
   | Content (LSet lset) -> Some lset
   | _ -> None
 
+let lookup_symbol x venv =
+  match List.assoc_opt x venv with
+  | Some f -> f
+  | None -> failwith ("unbound variable " ^ Symbol.show_symbol_raw x)
+
 let fix_captures : fresh_tvar -> venv -> tvar -> symbol -> unit =
  fun fresh_tvar venv t x ->
   let _ =
     let ( let* ) = Option.bind in
     let* lset = unlink_to_lset t in
     let* captures = SymbolMap.find_opt x lset in
-    SymbolMap.iter (fun x t -> unify fresh_tvar t (List.assoc x venv)) captures;
+    SymbolMap.iter
+      (fun x t -> unify fresh_tvar t (lookup_symbol x venv))
+      captures;
     None
   in
   ()
@@ -352,10 +359,9 @@ let infer_expr : Ctx.t -> venv -> e_expr -> tvar =
   in
   go venv e
 
-let infer_fn : Ctx.t -> venv -> symbol -> fn -> tvar =
- fun ctx venv lambda { arg = t_a, a; captures; body } ->
+let infer_fn : Ctx.t -> venv -> typed_symbol -> fn -> tvar =
+ fun ctx venv (t_fn, lambda) { arg = t_a, a; captures; body } ->
   let captures_list = SymbolMap.bindings captures in
-  let t_fn = ctx.fresh_tvar @@ Unbd in
   let venv' = ((lambda, t_fn) :: (a, t_a) :: captures_list) @ venv in
   let t_ret = infer_expr ctx venv' body in
   let t_lset =
@@ -365,21 +371,51 @@ let infer_fn : Ctx.t -> venv -> symbol -> fn -> tvar =
   unify ctx.fresh_tvar t_fn t_fn';
   t_fn
 
-let infer_def_val : Ctx.t -> venv -> def -> tvar =
- fun ctx venv ((_, x), def) ->
-  match def with
-  | `Fn fn -> infer_fn ctx venv x fn
-  | `Val e -> infer_expr ctx venv e
-  | `Run (e, _) -> infer_expr ctx venv e
-
 let infer : Ctx.t -> program -> unit =
  fun ctx program ->
+  let sccs = Defs_graph.scc_defs program in
+
   let rec walk venv = function
     | [] -> ()
-    | (((t, x), v) as def) :: defs ->
-        let t' = infer_def_val ctx venv def in
+    | [ ((t, x), `Fn fn) ] :: rest ->
+        let t_fn = ctx.fresh_tvar Unbd in
+        let t' = infer_fn ctx venv (t_fn, x) fn in
         unify ctx.fresh_tvar t t';
-        (match v with `Fn _ -> gen venv t' | `Val _ | `Run _ -> ());
-        walk ((x, t') :: venv) defs
+        gen venv t';
+        walk ((x, t') :: venv) rest
+    | [ ((t, x), (`Run (e, _) | `Val e)) ] :: rest ->
+        let t' = infer_expr ctx venv e in
+        unify ctx.fresh_tvar t t';
+        walk ((x, t') :: venv) rest
+    | rec_fns :: rest ->
+        let rec_fns =
+          List.map
+            (fun (b, f) ->
+              match f with `Fn fn -> (b, fn) | _ -> failwith "not fn")
+            rec_fns
+        in
+        (* add a fresh type variable for each function in the recursive group *)
+        let rec_venv =
+          List.map (fun ((_, x), _) -> (x, ctx.fresh_tvar Unbd)) rec_fns
+        in
+        (* infer each function in the recursive group *)
+        let rec_inferred =
+          List.map
+            (fun ((_, x), fn) ->
+              let t_fn = List.assoc x rec_venv in
+              (x, infer_fn ctx (rec_venv @ venv) (t_fn, x) fn))
+            rec_fns
+        in
+        (* now, bind each inferred type and generalize it *)
+        let rec_gen_venv =
+          List.map
+            (fun ((t, x), _) ->
+              let t' = List.assoc x rec_inferred in
+              unify ctx.fresh_tvar t t';
+              gen venv t';
+              (x, t'))
+            rec_fns
+        in
+        walk (rec_gen_venv @ venv) rest
   in
-  walk [] program
+  walk [] sccs

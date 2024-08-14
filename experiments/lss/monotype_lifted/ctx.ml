@@ -1,4 +1,4 @@
-type t = { symbols : Symbol.t; toplevels : Symbol.symbol list }
+type t = { symbols : Symbol.t; toplevels : Symbol.symbol list ref }
 
 let extract_toplevels (program : Monotype.Ast.program) =
   let open Monotype.Ast in
@@ -11,5 +11,7 @@ let extract_toplevels (program : Monotype.Ast.program) =
   in
   go [] program
 
+let add_toplevel t x = t.toplevels := x :: !(t.toplevels)
+
 let make ~symbols (program : Monotype.Ast.program) =
-  { symbols; toplevels = extract_toplevels program }
+  { symbols; toplevels = ref (extract_toplevels program) }

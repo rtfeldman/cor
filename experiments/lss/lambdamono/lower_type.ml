@@ -98,7 +98,13 @@ let extract_closure_captures :
   let t_lset = lower_type mono_cache fresh_tvar ty in
   match tvar_deref t_lset with
   | TTag bindings ->
-      let captures_list = List.assoc (lambda_tag_name name) bindings in
+      let captures_list =
+        match List.assoc_opt (lambda_tag_name name) bindings with
+        | Some binding -> binding
+        | None ->
+            failwith @@ "expected tag " ^ lambda_tag_name name
+            ^ " to be available in " ^ P.show_ty ty
+      in
       if List.length captures_list = 0 then None
       else (
         assert (List.length captures_list = 1);

@@ -33,6 +33,7 @@ run x = f 1 T2 0
 > 
 > run x = f 1 T2 0
 > ;;
+> 
 
 > cor-out +monotype -print
 > let f1: Int -> [T1, T2, T3] -> Int -> Int = \x ->
@@ -69,12 +70,12 @@ run x = f 1 T2 0
 >   ((f1 1) (T2 )) 0
 
 > cor-out +lambdasolved -print
-> let clos(x: Int): Int -[clos (x: Int), clos1 (x: Int), clos2 (x: Int)]-> Int = \y ->
->   ~add x y 1
-> let clos1(x: Int): Int -[clos (x: Int), clos1 (x: Int), clos2 (x: Int)]-> Int = \y1 ->
->   ~add x y1 2
 > let clos2(x: Int): Int -[clos (x: Int), clos1 (x: Int), clos2 (x: Int)]-> Int = \y2 ->
 >   ~add x y2 3
+> let clos1(x: Int): Int -[clos (x: Int), clos1 (x: Int), clos2 (x: Int)]-> Int = \y1 ->
+>   ~add x y1 2
+> let clos(x: Int): Int -[clos (x: Int), clos1 (x: Int), clos2 (x: Int)]-> Int = \y ->
+>   ~add x y 1
 > let clos3(x: Int): [T1, T2, T3]
 >                      -[clos3 (x: Int)]-> Int
 >                                            -[

@@ -41,6 +41,7 @@ run x = f T2 0
 > 
 > run x = f T2 0
 > ;;
+> 
 
 > cor-out +monotype -print
 > let f31: Int -> Int = \x2 ->

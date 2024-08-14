@@ -39,13 +39,14 @@ let free_vars e =
   go e
 
 let flip (x, y) = (y, x)
+let lookup_new_symbol x venv = List.assoc_opt x venv |> Option.value ~default:x
 
 let lambda_lift_expr ~(ctx : Ctx.t) expr : def list * e_expr =
   let rec go venv (t, e) =
     let lifted, e' =
       match e with
       | M.Var x ->
-          let x = List.assoc_opt x venv |> Option.value ~default:x in
+          let x = lookup_new_symbol x venv in
           ([], Var x)
       | M.Int x -> ([], Int x)
       | M.Str x -> ([], Str x)
@@ -61,9 +62,11 @@ let lambda_lift_expr ~(ctx : Ctx.t) expr : def list * e_expr =
       | M.Let (`Letfn (Letfn { bind = t_x, x; arg; body; recursive = _ }), rest)
         ->
           let captures =
-            free_vars body
+            free_vars body |> SymbolMap.bindings
+            |> List.map (fun (x, t) -> (lookup_new_symbol x venv, t))
+            |> List.to_seq |> SymbolMap.of_seq
             |> SymbolMap.remove_keys [ snd arg; x ]
-            |> SymbolMap.remove_keys ctx.toplevels
+            |> SymbolMap.remove_keys !(ctx.toplevels)
             |> SymbolMap.bindings |> List.map flip
           in
           (* A rename is needed to avoid conflicts with the same symbol in a
@@ -71,17 +74,20 @@ let lambda_lift_expr ~(ctx : Ctx.t) expr : def list * e_expr =
           let x' =
             ctx.symbols.fresh_symbol_named (Symbol.syn_of ctx.symbols x)
           in
-          let bind = (t_x, x') in
           let venv = (x, x') :: venv in
+          if List.length captures = 0 then Ctx.add_toplevel ctx x';
+          let bind = (t_x, x') in
           let lifted1, body = go venv body in
           let def = (bind, `Fn { arg; captures; body }) in
           let lifted2, (_, rest) = go venv rest in
           (lifted1 @ lifted2 @ [ def ], rest)
       | M.Clos { arg; body } ->
           let captures =
-            free_vars body
+            free_vars body |> SymbolMap.bindings
+            |> List.map (fun (x, t) -> (lookup_new_symbol x venv, t))
+            |> List.to_seq |> SymbolMap.of_seq
             |> SymbolMap.remove (snd arg)
-            |> SymbolMap.remove_keys ctx.toplevels
+            |> SymbolMap.remove_keys !(ctx.toplevels)
             |> SymbolMap.bindings |> List.map flip
           in
           let lifted, body = go venv body in

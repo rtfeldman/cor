@@ -1,4 +1,4 @@
 (library
   (name lambdasolved)
-  (libraries monotype_lifted symbol)
+  (libraries monotype_lifted symbol ocamlgraph)
   (preprocess (pps ppx_deriving.show)))

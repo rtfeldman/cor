@@ -46,12 +46,12 @@ run idstr = id "hello";;
 >   id2 "hello"
 
 > cor-out +lambdasolved -print
-> let id2: Str -[id2]-> Str = \x ->
->   x
 > let id1: Int -[id1]-> Int = \x ->
 >   x
 > run idint: Int =
 >   id1 1
+> let id2: Str -[id2]-> Str = \x ->
+>   x
 > run idstr: Str =
 >   id2 "hello"
 

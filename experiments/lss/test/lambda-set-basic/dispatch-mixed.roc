@@ -62,13 +62,13 @@ run main =
 >   adder 12
 
 > cor-out +lambdasolved -print
-> let clos: Int -[clos, clos1 (y: Int), clos2 (y1: Int) (z: Int)]-> Int = \w ->
->   w
-> let clos1(y: Int): Int -[clos, clos1 (y: Int), clos2 (y1: Int) (z: Int)]-> Int = \w1 ->
->   ~add w1 y
 > let clos2(y1: Int z: Int): Int
 >                              -[clos, clos1 (y: Int), clos2 (y1: Int) (z: Int)]-> Int = \w2 ->
 >   ~add w2 ~add y1 z
+> let clos1(y: Int): Int -[clos, clos1 (y: Int), clos2 (y1: Int) (z: Int)]-> Int = \w1 ->
+>   ~add w1 y
+> let clos: Int -[clos, clos1 (y: Int), clos2 (y1: Int) (z: Int)]-> Int = \w ->
+>   w
 > let f1: [A, B Int, C Int Int]
 >           -[f1]-> Int -[clos, clos1 (y: Int), clos2 (y1: Int) (z: Int)]-> Int = \t ->
 >   when t is
