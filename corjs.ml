@@ -53,25 +53,12 @@ let _ =
      [@jsdoc {|Target languages|}])
 
 let _ =
-  Js.export "phases"
-    ((Js.array @@ Array.of_list @@ List.map Js.string phases)
-     [@jsdoc {|Compiler target phases|}])
-
-let _ =
-  Js.export "emits"
-    ((Js.array @@ Array.of_list @@ List.map Js.string emits)
-     [@jsdoc {|Compiler target emits|}])
-
-let _ =
   Js.export "userProgram" (fun [@jsdoc {|Gets raw user program|}] prog ->
       Js.string @@ user_ann_program @@ raw_program_of_string
       @@ Js.to_string prog)
 
 let find_language l =
   find_language l |> Option.to_result ~none:("No language " ^ l)
-
-let phase_of_string s =
-  phase_of_string s |> Option.to_result ~none:("No phase " ^ s)
 
 let emit_of_string s =
   emit_of_string s |> Option.to_result ~none:("No emit " ^ s)
@@ -81,7 +68,6 @@ let compile prog lang phase emit =
   let raw_program = raw_program_of_string @@ prog in
 
   find_language lang >>= fun lang_mod ->
-  phase_of_string phase >>= fun phase ->
   emit_of_string emit >>= fun emit ->
   let { program; _ } = preprocess raw_program in
 
